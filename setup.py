@@ -45,6 +45,6 @@ setup(name='covid19pandas',
 	zip_safe=False,
 	include_package_data=True,
 	project_urls={
-	   'Documentation': ''
+	   'Documentation': 'https://github.com/PayneLab/covid19pandas/tree/master/docs/'
 	},
 	)
