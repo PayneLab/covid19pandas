@@ -5,7 +5,7 @@ import os.path as path
 # Get the path to our current directory
 path_here = path.abspath(path.dirname(__file__))
 
-# Get the package version from its universal storage location, cptac/version.py
+# Get the package version from its universal storage location, covid19pandas/version.py
 version = {}
 version_path = path.join(path_here, "covid19pandas", "version.py")
 with open(version_path) as fp:

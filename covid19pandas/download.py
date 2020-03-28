@@ -31,7 +31,7 @@ def download_github_file(url, path):
     file_bytes = base64.b64decode(resp_json["content"])
 
     with open(path, 'wb') as dest:
-        dest.write(response.content)
+        dest.write(file_bytes)
 
 def download_text(url):
     """Download text from a direct download url for a text file.

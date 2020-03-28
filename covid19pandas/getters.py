@@ -10,9 +10,10 @@
 #   limitations under the License.
 
 import pandas as pd
+import os
 import warnings
 from .download import download_github_file
-from .exceptions import NoInternetError, FileNotUpdatedWarning
+from .exceptions import NoInternetError, FileDoesNotExistError, FileNotUpdatedWarning
 
 def get_cases():
     return _get_table("time_series_covid19_confirmed_global.csv")
@@ -25,11 +26,11 @@ def get_recovered():
 
 # Helper functions
 
-def _get_table(file_name)
+def _get_table(file_name):
 
     # Construct the url and path for the file
     csse_time_series_url = "https://api.github.com/repos/CSSEGISandData/COVID-19/contents/csse_covid_19_data/csse_covid_19_time_series/"
-    path_here = path.abspath(path.dirname(__file__))
+    path_here = os.path.abspath(os.path.dirname(__file__))
     data_files_path = os.path.join(path_here, "data")
 
     url = csse_time_series_url + file_name
@@ -39,10 +40,10 @@ def _get_table(file_name)
     try:
         download_github_file(url, path)
     except NoInternetError:
-        warnings.warn("Insufficient internet to update data files. Data from most recent download will be used.", FileNotUpdatedWarning, stacklevel=4)
+        warnings.warn("Insufficient internet to update data files. Data from most recent download will be used.", FileNotUpdatedWarning, stacklevel=3)
 
     if not os.path.isfile(path):
-        raise FileDoesNotExistError("Data file has not been downloaded previously. Try again when you have a better internet connection.")
+        raise FileDoesNotExistError("Data file has not been downloaded previously, and current internet connection is not sufficient to download it. Try again when you have a better internet connection.")
 
     df = pd.read_csv(path)
 
