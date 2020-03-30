@@ -47,4 +47,6 @@ def _get_table(file_name):
 
     df = pd.read_csv(path)
 
+    df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore")).map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x)
+
     return df
