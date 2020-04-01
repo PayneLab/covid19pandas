@@ -20,20 +20,20 @@ from .exceptions import *
 def get_cases():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
-    return _get_table(url, "time_series_covid19_confirmed_global.csv", update=True)
+    return _get_table(url, "time_series_covid19_confirmed_global.csv", source="jhu", update=True)
 
 def get_deaths():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
-    return _get_table(url, "time_series_covid19_deaths_global.csv", update=True)
+    return _get_table(url, "time_series_covid19_deaths_global.csv", source="jhu", update=True)
 
 def get_recovered():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
-    return _get_table(url, "time_series_covid19_recovered_global.csv", update=True)
+    return _get_table(url, "time_series_covid19_recovered_global.csv", source="jhu", update=True)
 
 # New getters
-def get_data_jhu(region="global", format="long", data_type="all", update=True):
+def get_data_jhu(format="long", data_type="all", region="global", update=True):
 
     region = region.lower()
     format = format.lower()
@@ -104,7 +104,7 @@ def get_data_jhu(region="global", format="long", data_type="all", update=True):
 
     return all_df
 
-def get_data_nyt(counties=False, format="long", data_type="all", update=True):
+def get_data_nyt(format="long", data_type="all", counties=False, update=True):
 
     format = format.lower()
     data_type = data_type.lower()
