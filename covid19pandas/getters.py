@@ -177,6 +177,8 @@ def _get_table(base_url, file_name, source, update):
             download_github_file(url, path)
         except NoInternetError:
             warnings.warn("Insufficient internet to update data files. Data from most recent download will be used.", FileNotUpdatedWarning, stacklevel=3)
+    else:
+        warnings.warn("You chose to not update data files. Data from most recent download will be used. To update files instead, pass True to the 'update' parameter.", FileNotUpdatedWarning, stacklevel=3)
 
     if not os.path.isfile(path):
         raise FileDoesNotExistError("Data file has not been downloaded previously, and current internet connection is not sufficient to download it. Try again when you have a better internet connection.")
