@@ -47,6 +47,8 @@ for format in formats:
                             print(f"Logic error successfully caught! format='{format}', data_type='{data_type}', region='{region}', update='{update_option}'")
                 else:
                     df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
+                    if df.shape[0] <= 0 or df.shape[1] <=0:
+                        raise Exception(f"Dataframe had zero in shape: {df.shape}")
                     print(f"Success! format='{format}', data_type='{data_type}', region='{region}', update='{update_option}, returned {df.shape}'")
 
 # Test New York Times data getter
@@ -66,12 +68,20 @@ for format in formats:
                             print(f"Logic error successfully caught! format='{format}', data_type='{data_type}', counties='{county_option}', update='{update_option}'")
                 else:
                     df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
+                    if df.shape[0] <= 0 or df.shape[1] <=0:
+                        raise Exception(f"Dataframe had zero in shape: {df.shape}")
                     print(f"Success! format='{format}', data_type='{data_type}', counties='{county_option}', update='{update_option}, returned {df.shape}'")
 
 # Test deprecated getters
 df = cod.get_cases()
+if df.shape[0] <= 0 or df.shape[1] <=0:
+    raise Exception(f"Dataframe had zero in shape: {df.shape}")
 print(f"Success with deprecated get_cases method. Returned {df.shape}.")
 df = cod.get_deaths()
+if df.shape[0] <= 0 or df.shape[1] <=0:
+    raise Exception(f"Dataframe had zero in shape: {df.shape}")
 print(f"Success with deprecated get_deaths method. Returned {df.shape}.")
 df = cod.get_recovered()
+if df.shape[0] <= 0 or df.shape[1] <=0:
+    raise Exception(f"Dataframe had zero in shape: {df.shape}")
 print(f"Success with deprecated get_recovered method. Returned {df.shape}.")
