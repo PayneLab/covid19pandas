@@ -58,8 +58,15 @@ else:
     if REMOTE_VERSION != LOCAL_VERSION:
         warnings.warn(f"Your version of covid19pandas ({LOCAL_VERSION}) is out-of-date. Latest is {REMOTE_VERSION}. Please run 'pip install --upgrade covid19pandas' to update it.", OldPackageVersionWarning, stacklevel=2)
 
-# Make sure the data storage directory has been created
+# Make sure the data storage directories have been created
 PATH_HERE = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(PATH_HERE, "data")
+JHU_DIR = os.path.join(DATA_DIR, "jhu")
+NYT_DIR = os.path.join(DATA_DIR, "nyt")
+
 if not os.path.isdir(DATA_DIR):
     os.mkdir(DATA_DIR)
+if not os.path.isdir(JHU_DIR):
+    os.mkdir(JHU_DIR)
+if not os.path.isdir(NYT_DIR):
+    os.mkdir(NYT_DIR)

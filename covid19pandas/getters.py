@@ -12,41 +12,165 @@
 import pandas as pd
 import os
 import warnings
+import datetime
 from .download import download_github_file
-from .exceptions import NoInternetError, FileDoesNotExistError, FileNotUpdatedWarning
+from .exceptions import *
 
+# Old getters
 def get_cases():
-    return _get_table("time_series_covid19_confirmed_global.csv")
+    # Deprecated warning
+    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    return _get_table(url, "time_series_covid19_confirmed_global.csv", update=True)
 
 def get_deaths():
-    return _get_table("time_series_covid19_deaths_global.csv")
+    # Deprecated warning
+    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    return _get_table(url, "time_series_covid19_deaths_global.csv", update=True)
 
 def get_recovered():
-    return _get_table("time_series_covid19_recovered_global.csv")
+    # Deprecated warning
+    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    return _get_table(url, "time_series_covid19_recovered_global.csv", update=True)
+
+# New getters
+def get_data_jhu(region="global", format="long", data_type="all", update=True):
+
+    region = region.lower()
+    format = format.lower()
+    data_type = data_type.lower()
+
+    # Parameter checks
+    if format not in ("long", "wide"):
+        raise ParameterError(f"Invalid argument for 'format' parameter. You passed {format}. Valid options are 'long' or 'wide'.")
+    if region not in ("global", "us"):
+        raise ParameterError(f"Invalid argument for 'region' parameter. You passed {region}. Valid options are 'global' or 'us'.")
+    if data_type not in ("all", "cases", "deaths", "recovered"):
+        raise ParameterError(f"Invalid argument for 'data_type' parameter. You passed {data_type}. Valid options are 'all', 'cases', 'deaths', or 'recovered'.")
+
+    # Logic checks
+    if region == "us" and data_type == "recovered":
+        raise ParameterError("JHU does not provide recovery data for US states/counties.")
+    if format == "wide" and data_type == "all":
+        raise ParameterError("'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.")
+
+
+    base_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    file_names = {
+        "global": {
+            "cases": "time_series_covid19_confirmed_global.csv",
+            "deaths": "time_series_covid19_deaths_global.csv",
+            "recovered": "time_series_covid19_recovered_global.csv",
+        },
+         "us": {
+            "cases": "time_series_covid19_confirmed_US.csv",
+            "deaths": "time_series_covid19_deaths_US.csv",
+        }
+    }
+
+    if format == "wide":
+        return _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
+
+    # Get the requested table types
+    dfs = {}
+    if data_type == "all":
+        for iter_data_type in file_names[region].keys():
+             dfs[iter_data_type] = _get_table(base_url, file_names[region][iter_data_type], source="jhu", update=update)
+    else:
+         dfs[data_type] = _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
+
+    # Gather the tables into long format (a la tidyr), and join into one table
+    all_df = None
+    for iter_data_type, df in dfs.items():
+
+        id_cols = [col for col in df.columns if not isinstance(col, datetime.date)]
+        df = pd.melt(df, id_vars=id_cols, var_name="date", value_name=iter_data_type)
+        df = df[df[iter_data_type] != 0] # Drop rows of zeros
+
+        id_cols.append("date")
+        if all_df is None:
+            all_df = pd.DataFrame(columns=id_cols)
+            all_df = all_df.set_index(id_cols)
+
+        df = df.set_index(id_cols)
+        all_df = all_df.join(df, how="outer")
+
+    if region == "global":
+        all_df = all_df.sort_index(level=["date", "Country/Region", "Province/State"])
+    elif region == "us":
+        all_df = all_df.sort_index(level=["date", "UID"])
+
+    all_df = all_df.fillna(0)
+    all_df = all_df.reset_index()
+
+    return all_df
+
+def get_data_nyt(counties=False, format="long", data_type="all", update=True):
+
+    format = format.lower()
+    data_type = data_type.lower()
+
+    # Parameter checks
+    if format not in ("long", "wide"):
+        raise ParameterError(f"Invalid argument for 'format' parameter. You passed {format}. Valid options are 'long' or 'wide'.")
+    if data_type not in ("all", "cases", "deaths"):
+        raise ParameterError(f"Invalid argument for 'data_type' parameter. You passed {data_type}. Valid options are 'all', 'cases', or 'deaths'.")
+
+    # Logic checks
+    if format == "wide" and data_type == "all":
+        raise ParameterError("'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.")
+
+    # Get either counties or states table
+    base_url = "https://raw.githubusercontent.com/nytimes/covid-19-data/master/"
+    if counties:
+        df = _get_table(base_url, "us-counties.csv", source="nyt", update=update)
+    else: # states
+        df = _get_table(base_url, "us-states.csv", source="nyt", update=update)
+
+    # Drop unrequested columns, if needed
+    if data_type == "cases":
+        df = df.drop(columns="deaths")
+    elif data_type == "deaths":
+        df = df.drop(columns="cases")
+
+    if format == "long":
+        return df
+
+    # Spread table into wide format, a la tidyr
+    id_cols = [col for col in df.columns if col != data_type]
+    df = df.set_index(id_cols)
+    df = df.unstack(level=0, fill_value=0)
+    df.columns = df.columns.droplevel(0)
+    df.columns.name = None
+    df = df.sort_index(level="state")
+    df = df.reset_index()
+
+    return df
 
 # Helper functions
 
-def _get_table(file_name):
+def _get_table(base_url, file_name, source, update):
 
     # Construct the url and path for the file
-    csse_time_series_url = "https://api.github.com/repos/CSSEGISandData/COVID-19/contents/csse_covid_19_data/csse_covid_19_time_series/"
     path_here = os.path.abspath(os.path.dirname(__file__))
-    data_files_path = os.path.join(path_here, "data")
+    path = os.path.join(path_here, "data", source, file_name)
 
-    url = csse_time_series_url + file_name
-    path = os.path.join(data_files_path, file_name)
-
-    # Download the latest version of the file
-    try:
-        download_github_file(url, path)
-    except NoInternetError:
-        warnings.warn("Insufficient internet to update data files. Data from most recent download will be used.", FileNotUpdatedWarning, stacklevel=3)
+    if update:
+        # Download the latest version of the file
+        url = base_url + file_name
+        try:
+            download_github_file(url, path)
+        except NoInternetError:
+            warnings.warn("Insufficient internet to update data files. Data from most recent download will be used.", FileNotUpdatedWarning, stacklevel=3)
 
     if not os.path.isfile(path):
         raise FileDoesNotExistError("Data file has not been downloaded previously, and current internet connection is not sufficient to download it. Try again when you have a better internet connection.")
 
     df = pd.read_csv(path)
 
-    df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore")).map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x)
+    # Formatting fixes
+    if source == "jhu":
+        df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore")).map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x)
+    if "Long_" in df.columns:
+        df = df.rename(columns={"Long_": "Long"})
 
     return df

@@ -9,9 +9,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-import os
 import requests
-import base64
 from .exceptions import NoInternetError
 
 def download_github_file(url, path): 
@@ -27,11 +25,8 @@ def download_github_file(url, path):
     except requests.RequestException: # Parent class for all exceptions in the requests module
         raise NoInternetError("Insufficient internet. Check your internet connection.") from None
 
-    resp_json = response.json()
-    file_bytes = base64.b64decode(resp_json["content"])
-
     with open(path, 'wb') as dest:
-        dest.write(file_bytes)
+        dest.write(response.content)
 
 def download_text(url):
     """Download text from a direct download url for a text file.

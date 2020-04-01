@@ -22,6 +22,10 @@ class FileDoesNotExistError(PackageError):
     """The file does not exist."""
     pass
 
+class ParameterError(PackageError):
+    """Parameter error."""
+    pass
+
 # Warnings
 class PackageWarning(UserWarning):
     """Base class for all warnings we'll generate."""
