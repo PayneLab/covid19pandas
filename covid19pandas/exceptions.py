@@ -39,6 +39,10 @@ class FileNotUpdatedWarning(PackageWarning):
     """Data file was not updated."""
     pass
 
+class DeprecatedWarning(PackageWarning):
+    """Something is deprecated."""
+    pass
+
 # Developer-directed exceptions
 class PackageDevError(Exception):
     """For exceptions that are probably the developer's fault."""

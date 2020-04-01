@@ -20,18 +20,21 @@ from .exceptions import *
 def get_cases():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
     print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_confirmed_global.csv", source="jhu", update=True)
 
 def get_deaths():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
     print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_deaths_global.csv", source="jhu", update=True)
 
 def get_recovered():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
     print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_recovered_global.csv", source="jhu", update=True)
 
@@ -102,6 +105,12 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
         all_df = all_df.sort_index(level=["date", "Country/Region", "Province/State"])
     elif region == "us":
         all_df = all_df.sort_index(level=["date", "UID"])
+
+    # Reorder index so date is first
+    idx_names = list(all_df.index.names)
+    idx_names.remove("date")
+    new_idx_name_order = ["date"] + idx_names
+    all_df = all_df.reorder_levels(new_idx_name_order)
 
     all_df = all_df.fillna(0)
     all_df = all_df.reset_index()
