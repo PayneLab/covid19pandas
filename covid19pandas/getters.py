@@ -20,16 +20,19 @@ from .exceptions import *
 def get_cases():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_confirmed_global.csv", source="jhu", update=True)
 
 def get_deaths():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_deaths_global.csv", source="jhu", update=True)
 
 def get_recovered():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_recovered_global.csv", source="jhu", update=True)
 
 # New getters
@@ -68,6 +71,7 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
     }
 
     if format == "wide":
+        print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
         return _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
 
     # Get the requested table types
@@ -102,6 +106,7 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
     all_df = all_df.fillna(0)
     all_df = all_df.reset_index()
 
+    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return all_df
 
 def get_data_nyt(format="long", data_type="all", counties=False, update=True):
@@ -133,6 +138,7 @@ def get_data_nyt(format="long", data_type="all", counties=False, update=True):
         df = df.drop(columns="cases")
 
     if format == "long":
+        print("These data were obtained from The New York Times (https://github.com/nytimes/covid-19-data).")
         return df
 
     # Spread table into wide format, a la tidyr
@@ -144,6 +150,7 @@ def get_data_nyt(format="long", data_type="all", counties=False, update=True):
     df = df.sort_index(level="state")
     df = df.reset_index()
 
+    print("These data were obtained from The New York Times (https://github.com/nytimes/covid-19-data).")
     return df
 
 # Helper functions
