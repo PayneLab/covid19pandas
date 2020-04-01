@@ -7,5 +7,5 @@ Install the package via pip: `pip install covid19pandas`
 ### Usage
 After importing the package, you can access data with one function call, formatted for easy plotting:
 
-![Usage demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_usage.png)
+![Usage demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_basic_usage.png)
 
