@@ -5,7 +5,7 @@ This package presents COVID-19 data from [Johns Hopkins University](https://gith
 Install the package via pip: `pip install covid19pandas`
 
 ### Usage
-After importing the package, you can access data with one function call, formatted for easy plotting:
+After importing the package, you can access data with a single function call:
 
 ![Usage demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_basic_usage.png)
 
