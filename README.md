@@ -9,3 +9,6 @@ After importing the package, you can access data with one function call, formatt
 
 ![Usage demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_basic_usage.png)
 
+Our [tutorials](https://github.com/PayneLab/covid19pandas/tree/master/docs) show you how to quickly create plots such as this one:
+
+![Plot_demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_plot_demo.png)
