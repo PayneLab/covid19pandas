@@ -9,6 +9,6 @@ After importing the package, you can quickly access data with a simple function 
 
 ![Usage demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_basic_usage.png)
 
-Our [tutorials](https://github.com/PayneLab/covid19pandas/tree/master/docs) show you how to create plots such as this one:
+Our [tutorials](https://github.com/PayneLab/covid19pandas/tree/master/docs) show you how to create plots like this one:
 
 ![Plot_demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_plot_demo.png)
