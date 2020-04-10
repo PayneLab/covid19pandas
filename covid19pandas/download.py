@@ -13,10 +13,10 @@ import requests
 from .exceptions import NoInternetError
 
 def download_github_file(url, path): 
-    """Download a file using the GitHub API and save to the specified location.
+    """Download a file from raw.githubusercontent.com and save to the specified location.
 
     Parameters:
-    url (str): The GitHub API url to access the file.
+    url (str): The raw.githubusercontent.com URL to access the file.
     path (str): The path to the file (not just the directory) to save the file to on the local machine.
     """
     try:

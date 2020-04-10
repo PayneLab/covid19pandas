@@ -9,12 +9,26 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+"""
+Get COVID-19 data as pandas dataframes in just one function call. Built-in plotting functions. Tutorials in our docs.
+
+To get help on functions for getting data tables, exit the current help dialog and run 'help(covid19pandas.getters)'.
+
+To get help on functions for manipulating data tables, exit the current help dialog and run 'help(covid19pandas.selectors)'.
+
+To get help on functions for plotting data, exit the current help dialog and run 'help(covid19pandas.plotters)'.
+
+See also our tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs>.
+"""
+
 import pandas as pd
 import os
 import sys
 import warnings
 
 from .getters import *
+from .selectors import *
+from .plotters import *
 from .download import download_text as _download_text
 from .exceptions import PackageError, NoInternetError, PackageWarning, OldPackageVersionWarning
 

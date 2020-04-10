@@ -9,6 +9,10 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+"""
+For more help, see our tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs>.
+"""
+
 import pandas as pd
 import os
 import warnings
@@ -18,6 +22,8 @@ from .exceptions import *
 
 # Old getters
 def get_cases():
+    """***DEPRECATED - Use get_data_jhu instead.***
+    Get most recent case counts from JHU."""
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
     warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
@@ -25,6 +31,8 @@ def get_cases():
     return _get_table(url, "time_series_covid19_confirmed_global.csv", source="jhu", update=True)
 
 def get_deaths():
+    """***DEPRECATED - Use get_data_jhu instead.***
+    Get most recent fatality counts from JHU."""
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
     warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
@@ -32,6 +40,8 @@ def get_deaths():
     return _get_table(url, "time_series_covid19_deaths_global.csv", source="jhu", update=True)
 
 def get_recovered():
+    """***DEPRECATED - Use get_data_jhu instead.***
+    Get most recent recovered counts from JHU."""
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
     warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
@@ -40,6 +50,17 @@ def get_recovered():
 
 # New getters
 def get_data_jhu(format="long", data_type="all", region="global", update=True):
+    """Get the most current data tables from JHU (https://github.com/CSSEGISandData/COVID-19).
+
+    Parameters:
+    format (str, optional): Format to return the tables in. Pass either "long" or "wide". See https://en.wikipedia.org/wiki/Wide_and_narrow_data for details on the two formats. Default "long".
+    data_type (str, optional): The type of data to get. Either "cases", "deaths", "recovered", or "all". Default "all".
+    region (str, optional): The region to get data for. Either "global" or "us" (meaning United States). Default "global".
+    update (bool, optional): Whether to download the latest tables from the Internet. Otherwise, will attempt to use previously downloaded tables, if they exist. Default True.
+
+    Returns:
+    pandas.DataFrame: The requested data table.
+    """
 
     region = region.lower()
     format = format.lower()
@@ -113,12 +134,24 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
     all_df = all_df.reorder_levels(new_idx_name_order)
 
     all_df = all_df.fillna(0)
+    all_df = all_df.astype('int64')
     all_df = all_df.reset_index()
 
     print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return all_df
 
 def get_data_nyt(format="long", data_type="all", counties=False, update=True):
+    """Get the most current data tables from NYT (https://github.com/nytimes/covid-19-data).
+
+    Parameters:
+    format (str, optional): Format to return the tables in. Pass either "long" or "wide". See https://en.wikipedia.org/wiki/Wide_and_narrow_data for details on the two formats. Default "long".
+    data_type (str, optional): The type of data to get. Either "cases", "deaths", or "all". Default "all".
+    counties (bool, optional): Whether to get county-level data instead of state-level data. Default False.
+    update (bool, optional): Whether to download the latest tables from the Internet. Otherwise, will attempt to use previously downloaded tables, if they exist. Default True.
+
+    Returns:
+    pandas.DataFrame: The requested data table.
+    """
 
     format = format.lower()
     data_type = data_type.lower()
@@ -165,6 +198,16 @@ def get_data_nyt(format="long", data_type="all", counties=False, update=True):
 # Helper functions
 
 def _get_table(base_url, file_name, source, update):
+    """Get a table.
+
+    Parameters:
+    base_url (str): The raw.githubusercontent.com URL to the folder that contains the file we want.
+    file_name (str): The name of the file we want from the folder specified by the URL.
+    update (bool): Whether to re-download the table from the Internet. Otherwise, will load a previously downloaded copy, if it exists.
+
+    Returns:
+    pandas.DataFrame: The requested DataFrame.
+    """
 
     # Construct the url and path for the file
     path_here = os.path.abspath(os.path.dirname(__file__))
