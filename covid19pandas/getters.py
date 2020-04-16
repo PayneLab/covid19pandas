@@ -110,7 +110,7 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
     all_df = None
     for iter_data_type, df in dfs.items():
 
-        id_cols = [col for col in df.columns if not isinstance(col, datetime.date)]
+        id_cols = [col for col in df.columns if not issubclass(type(col), datetime.date)]
         df = pd.melt(df, id_vars=id_cols, var_name="date", value_name=iter_data_type)
         df = df[df[iter_data_type] != 0] # Drop rows of zeros
 

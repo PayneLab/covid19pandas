@@ -18,7 +18,7 @@ with open(readme_path) as readme_file:
 
 setup(name='covid19pandas',
 	version=version['__version__'],
-	description='Get COVID-19 data as pandas dataframes in just one function call. Built-in plotting functions. Tutorials in our docs.',
+	description='COVID-19 data as pandas dataframes. Built-in plotting functions. Tutorials in our docs.',
 	long_description=readme_text,
 	long_description_content_type='text/markdown',
 	url='https://github.com/PayneLab/covid19pandas',

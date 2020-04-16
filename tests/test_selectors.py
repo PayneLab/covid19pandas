@@ -16,13 +16,13 @@ import pandas as pd
 import numpy as np
 import datetime
 
-formats = ("long", "wide")
-jhu_data_types = ("all", "cases", "deaths", "recovered")
-jhu_regions = ("global", "us")
-update_options = (True, False)
+formats = ["long", "wide"]
+jhu_data_types = ["all", "cases", "deaths", "recovered"]
+jhu_regions = ["global", "us"]
+update_options = [True, False]
 
-nyt_data_types = ("all", "cases", "deaths")
-nyt_county_options = (True, False)
+nyt_data_types = ["all", "cases", "deaths"]
+nyt_county_options = [True, False]
 
 class TestSelectors:
     def test_calc_daily_change(self):
@@ -121,12 +121,16 @@ class TestSelectors:
 
         elif format == "wide":
             daily = cod.calc_daily_change(df, data_type)
-            date_cols = [col for col in data.columns if issubclass(type(col), datetime.date)]
+            date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
+
+            id_cols = [col for col in df.columns if not issubclass(type(col), datetime.date)]
+            df = df.sort_values(by=id_cols)
+            daily = daily.sort_values(by=id_cols)
 
             for i in range(1, len(date_cols)):
                 day = date_cols[i]
                 prev_day = date_cols[i - 1]
-                assert daily[day].equals(df[day] - df[prev_day])
+                assert np.equal(daily[day].values, (df[day] - df[prev_day]).values).all()
 
         else:
             raise Exception(f"Invalid format '{format}'")

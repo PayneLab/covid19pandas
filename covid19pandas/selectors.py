@@ -98,7 +98,6 @@ def calc_daily_change(data, data_type="all", keep_cumulative=False):
     """
     wide = False
     if "date" not in data.columns:
-        data = _wide_to_long(data, data_type) # If they give us a wide format table, convert it to long format.
         wide = True
 
     if wide and keep_cumulative:
@@ -106,10 +105,9 @@ def calc_daily_change(data, data_type="all", keep_cumulative=False):
 
     if data_type == "all":
         if wide:
-            raise ParameterError("You passed data_type='all', but having your wide table format and processing multiple data types is not possible. Pass a long format table, or process one data type at a time.")
+            raise ParameterError("You passed data_type='all', but having your wide table format and processing multiple data types is not possible, since a wide format table contains only one data type. Pass a long format table, or process one data type at a time.")
 
         data_types = ["cases", "deaths"]
-
         if "recovered" in data.columns:
             data_types.append("recovered")
 
@@ -125,46 +123,60 @@ def calc_daily_change(data, data_type="all", keep_cumulative=False):
         group_cols = ["Combined_Key"]
     elif {"county", "state"}.issubset(data.columns): # NYT USA state and county table
         group_cols = ["county", "state"]
-    elif {"state"}.issubset(data.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
+    elif {"state"}.issubset(data.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not the state/county table.
         group_cols = ["state"]
     else:
         raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{data.columns}")
 
-    for iter_data_type in data_types:
-
-        if iter_data_type not in data.columns:
-            raise ParameterError(f"There is no '{iter_data_type}' column in the dataframe you passed. Existing columns: \n{data.columns}")
-
-        # Duplicate grouping cols, since they'll be lost when used for grouping
-        for group_col in group_cols:
-            data = data.assign(**{group_col + "_group": data[group_col]})
-
-        # Add the suffix to the group_cols list, so we group by (and lose) the duplicated columns
-        suffix_group_cols = [col + "_group" for col in group_cols]
-
-        # Duplicate the count col so we can keep the cumulative counts if desired
-        daily_col = "daily_" + iter_data_type
-        data = data.assign(**{daily_col: data[iter_data_type]})
-
-        # Put all columns besides the duplicates we created into the index, so they aren't affected by the groupby
-        id_cols = data.columns[~data.columns.isin(suffix_group_cols + [daily_col])].tolist()
-        data = data.set_index(id_cols)
-
-        # Fill NaNs in grouping cols (fillna excludes index)
-        data = data.fillna(0)
-
-        # Group by location and calculate daily counts with our helper function _offset_subtract
-        data = data.groupby(suffix_group_cols).transform(_offset_subtract)
-
-        # Take the other columns out of the index
-        data = data.reset_index()
-
-        if not keep_cumulative:
-            data = data.drop(columns=iter_data_type) # Drop the original cumulative count column
-
     if wide:
-        data = _long_to_wide(data, data_type, possible_data_types=["daily_cases", "daily_deaths", "daily_recovered"]) # Since it originally came from a wide format, we wouldn't need to drop extra count columns because they wouldn't exist, but we pass the custom possible_data_types just in case implementation changes.
-        
+        if not data.columns.map(lambda x: issubclass(type(x), datetime.date)).any():
+            raise ParameterError("Invalid table format. Must either have a 'date' column, or have dates as the columns.")
+
+        id_cols = [col for col in data.columns if not isinstance(col, datetime.date)]
+        date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
+
+        new_data = data[id_cols]
+        new_data = new_data.assign(**{date_cols[0]: data[date_cols[0]]}) # All counts on first day were new
+        for i in range(1, len(date_cols)):
+            day = date_cols[i]
+            prev_day = date_cols[i - 1]
+            new_data.assign(**{day: data[day] - data[prev_day]})
+
+        data = new_data
+
+    else: # It's a long format table
+        for iter_data_type in data_types:
+
+            if iter_data_type not in data.columns:
+                raise ParameterError(f"There is no '{iter_data_type}' column in the dataframe you passed. Existing columns: \n{data.columns}")
+
+            # Duplicate grouping cols, since they'll be lost when used for grouping
+            for group_col in group_cols:
+                data = data.assign(**{group_col + "_group": data[group_col]})
+
+            # Add the suffix to the group_cols list, so we group by (and lose) the duplicated columns
+            suffix_group_cols = [col + "_group" for col in group_cols]
+
+            # Duplicate the count col so we can keep the cumulative counts if desired
+            daily_col = "daily_" + iter_data_type
+            data = data.assign(**{daily_col: data[iter_data_type]})
+
+            # Put all columns besides the duplicates we created into the index, so they aren't affected by the groupby
+            id_cols = data.columns[~data.columns.isin(suffix_group_cols + [daily_col])].tolist()
+            data = data.set_index(id_cols)
+
+            # Fill NaNs in grouping cols (fillna excludes index)
+            data = data.fillna(0)
+
+            # Group by location and calculate daily counts with our helper function _offset_subtract
+            data = data.groupby(suffix_group_cols).transform(_offset_subtract)
+
+            # Take the other columns out of the index
+            data = data.reset_index()
+
+            if not keep_cumulative:
+                data = data.drop(columns=iter_data_type) # Drop the original cumulative count column
+
     return data
 
 
@@ -243,6 +255,7 @@ def _long_to_wide(data, data_type, possible_data_types=["cases", "deaths", "reco
     data = data.set_index(id_cols) # Putting these in the index keeps them from being spread
     data = data.unstack(level=0, fill_value=0)
     data.columns = data.columns.droplevel(0)
+    data.columns = data.columns.map(lambda x: x.date()) # We don't want the whole timestamp
     data.columns.name = None
     data = data.reset_index() # Take the saved columns out of the index
 

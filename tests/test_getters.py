@@ -12,76 +12,60 @@
 import covid19pandas as cod
 import covid19pandas.exceptions as codex
 
+import pytest
 
-formats = ("long", "wide")
-jhu_data_types = ("all", "cases", "deaths", "recovered")
-jhu_regions = ("global", "us")
-update_options = (True, False)
+formats = ["long", "wide"]
+jhu_data_types = ["all", "cases", "deaths", "recovered"]
+jhu_regions = ["global", "us"]
+update_options = [True, False]
 
-nyt_data_types = ("all", "cases", "deaths")
-nyt_county_options = (True, False)
+nyt_data_types = ["all", "cases", "deaths"]
+nyt_county_options = [True, False]
 
-# Test Johns Hopkins data getter
-for format in formats:
-    for data_type in jhu_data_types:
-        for region in jhu_regions:
-            for update_option in update_options:
+class TestGetters:
 
-                # Check that logic errors get caught
-                if region == "us" and data_type == "recovered":
-                    try:
-                        cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
-                    except codex.ParameterError as e:
-                        if str(e) != "JHU does not provide recovery data for US states/counties.":
-                            raise Exception(f"Test failed. format='{format}', data_type='{data_type}', region='{region}', update='{update_option}'")
+    def test_get_data_jhu():
+        for format in formats:
+            for data_type in jhu_data_types:
+                for region in jhu_regions:
+                    for update_option in update_options:
+
+                        # Check that logic errors get caught
+                        if region == "us" and data_type == "recovered":
+                            with pytest.raises(codex.ParameterError) as excinfo:
+                                cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
+                            assert str(excinfo.value) == "JHU does not provide recovery data for US states/counties.":
+
+                        elif format == "wide" and data_type == "all":
+                            with pytest.raises(codex.ParameterError) as excinfo:
+                                cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
+                            assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.":
+
                         else:
-                            print(f"Logic error successfully caught! format='{format}', data_type='{data_type}', region='{region}', update='{update_option}'")
+                            df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
+                            assert df.shape[0] > 0 and df.shape[1] > 0:
+                            df.to_csv("out.txt", mode="a")
 
-                elif format == "wide" and data_type == "all":
-                    try:
-                        cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
-                    except codex.ParameterError as e:
-                        if str(e) != "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.":
-                            raise Exception(f"Test failed. format='{format}', data_type='{data_type}', region='{region}', update='{update_option}'")
+    def test_get_data_nyt():
+        for format in formats:
+            for data_type in nyt_data_types:
+                for county_option in nyt_county_options:
+                    for update_option in update_options:
+
+                        # Check that logic errors get caught
+                        if format == "wide" and data_type == "all":
+                            with pytest.raises(codex.ParameterError) as excinfo:
+                                cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
+                            assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.":
                         else:
-                            print(f"Logic error successfully caught! format='{format}', data_type='{data_type}', region='{region}', update='{update_option}'")
-                else:
-                    df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
-                    if df.shape[0] <= 0 or df.shape[1] <=0:
-                        raise Exception(f"Dataframe had zero in shape: {df.shape}")
-                    print(f"Success! format='{format}', data_type='{data_type}', region='{region}', update='{update_option}, returned {df.shape}'")
+                            df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
+                            assert df.shape[0] > 0 and df.shape[1] > 0:
+                            df.to_csv("out.txt", mode="a")
 
-# Test New York Times data getter
-for format in formats:
-    for data_type in nyt_data_types:
-        for county_option in nyt_county_options:
-            for update_option in update_options:
-
-                # Check that logic errors get caught
-                if format == "wide" and data_type == "all":
-                    try:
-                        cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
-                    except codex.ParameterError as e:
-                        if str(e) != "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.":
-                            raise Exception(f"Test failed. format='{format}', data_type='{data_type}', counties='{county_option}', update='{update_option}'")
-                        else:
-                            print(f"Logic error successfully caught! format='{format}', data_type='{data_type}', counties='{county_option}', update='{update_option}'")
-                else:
-                    df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
-                    if df.shape[0] <= 0 or df.shape[1] <=0:
-                        raise Exception(f"Dataframe had zero in shape: {df.shape}")
-                    print(f"Success! format='{format}', data_type='{data_type}', counties='{county_option}', update='{update_option}, returned {df.shape}'")
-
-# Test deprecated getters
-df = cod.get_cases()
-if df.shape[0] <= 0 or df.shape[1] <=0:
-    raise Exception(f"Dataframe had zero in shape: {df.shape}")
-print(f"Success with deprecated get_cases method. Returned {df.shape}.")
-df = cod.get_deaths()
-if df.shape[0] <= 0 or df.shape[1] <=0:
-    raise Exception(f"Dataframe had zero in shape: {df.shape}")
-print(f"Success with deprecated get_deaths method. Returned {df.shape}.")
-df = cod.get_recovered()
-if df.shape[0] <= 0 or df.shape[1] <=0:
-    raise Exception(f"Dataframe had zero in shape: {df.shape}")
-print(f"Success with deprecated get_recovered method. Returned {df.shape}.")
+    def test_deprecated_getters():
+        df = cod.get_cases()
+        assert df.shape[0] > 0 and df.shape[1] > 0:
+        df = cod.get_deaths()
+        assert df.shape[0] > 0 and df.shape[1] > 0:
+        df = cod.get_recovered()
+        assert df.shape[0] > 0 and df.shape[1] > 0:
