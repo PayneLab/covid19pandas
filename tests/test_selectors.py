@@ -16,7 +16,8 @@ import pandas as pd
 import numpy as np
 import datetime
 
-formats = ["long", "wide"]
+#formats = ["long", "wide"]
+formats = ["wide"]
 jhu_data_types = ["all", "cases", "deaths", "recovered"]
 jhu_regions = ["global", "us"]
 update_options = [True, False]

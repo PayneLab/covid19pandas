@@ -188,6 +188,7 @@ def get_data_nyt(format="long", data_type="all", counties=False, update=True):
     df = df.set_index(id_cols)
     df = df.unstack(level=0, fill_value=0)
     df.columns = df.columns.droplevel(0)
+    df.columns = df.columns.map(lambda x: pd.to_datetime(x).date())
     df.columns.name = None
     df = df.sort_index(level="state")
     df = df.reset_index()

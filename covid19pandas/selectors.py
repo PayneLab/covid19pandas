@@ -132,15 +132,16 @@ def calc_daily_change(data, data_type="all", keep_cumulative=False):
         if not data.columns.map(lambda x: issubclass(type(x), datetime.date)).any():
             raise ParameterError("Invalid table format. Must either have a 'date' column, or have dates as the columns.")
 
-        id_cols = [col for col in data.columns if not isinstance(col, datetime.date)]
-        date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
+        cols_are_dates_filter = data.columns.map(lambda x: issubclass(type(x), datetime.date)).to_series().astype(bool)
+        id_cols = data.columns[~cols_are_dates_filter].tolist()
+        date_cols = data.columns[cols_are_dates_filter].tolist()
 
         new_data = data[id_cols]
-        new_data = new_data.assign(**{date_cols[0]: data[date_cols[0]]}) # All counts on first day were new
+        new_data = new_data.assign(**{str(date_cols[0]): data[date_cols[0]]}) # All counts on first day were new
         for i in range(1, len(date_cols)):
             day = date_cols[i]
             prev_day = date_cols[i - 1]
-            new_data.assign(**{day: data[day] - data[prev_day]})
+            new_data.insert(loc=len(new_data.columns), column=day, value=data[day] - data[prev_day])
 
         data = new_data
 
