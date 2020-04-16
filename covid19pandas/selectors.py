@@ -84,24 +84,90 @@ def calc_x_day_avg(data, x=3):
     pandas.DataFrame: The table, averaged over the specified number of days.
     """
     pass
-#
-#def calc_daily_change(data, data_type="all", keep_cumulative=False):
-#    """Get the daily change in the number of cases/deaths/recoveries, instead of cumulative counts.
-#    
-#    Parameters:
-#    data (pandas.DataFrame): The cumulative counts from which to calculate the daily change.
-#    data_type (str): When your table contains multiple count types (e.g. cases, deaths, recovered), use this parameter to specify which columns you want to calculate the daily change for. Other columns will be left unchanged. Default "all".
-#    keep_cumulative (bool, optional): Whether to keep the original column of cumulative counts next to the new daily change column; otherwise drop it. Default False.
-#    
-#    Returns:
-#    pandas.DataFrame: The same table, but with daily change in counts.
-#    """
-#temp_cases = list(data["cases"])
-#temp_cases = [0] + temp_cases[:-1] # Offset all values by 1 row
-#daily_new_cases = data["cases"] - temp_cases
-#data.insert(1, "new_cases", daily_new_cases)
-#
-#
+
+def calc_daily_change(data, data_type="all", keep_cumulative=False):
+    """Get the daily change in the number of cases/deaths/recoveries, instead of cumulative counts.
+    
+    Parameters:
+    data (pandas.DataFrame): The cumulative counts from which to calculate the daily change.
+    data_type (str): When your table contains multiple count types (e.g. cases, deaths, recovered), use this parameter to specify which columns you want to calculate the daily change for. Other columns will be left unchanged. Default "all".
+    keep_cumulative (bool, optional): Whether to keep the original column of cumulative counts next to the new daily change column; otherwise drop it. Default False.
+    
+    Returns:
+    pandas.DataFrame: The same table, but with daily change in counts. The column is named "daily_" + data_type
+    """
+    wide = False
+    if "date" not in data.columns:
+        data = _wide_to_long(data, data_type) # If they give us a wide format table, convert it to long format.
+        wide = True
+
+    if wide and keep_cumulative:
+        raise ParameterError("Cannot keep cumulative counts when given a wide format table. Either use a long format table, or pass keep_cumulative=False.")
+
+    if data_type == "all":
+        if wide:
+            raise ParameterError("You passed data_type='all', but having your wide table format and processing multiple data types is not possible. Pass a long format table, or process one data type at a time.")
+
+        data_types = ["cases", "deaths"]
+
+        if "recovered" in data.columns:
+            data_types.append("recovered")
+
+    elif data_type in ["cases", "deaths", "recovered"]:
+        data_types = [data_type]
+    else:
+        raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', or 'recovered'.")
+
+    # Search for defined grouping cols (based on data source and region)
+    if {"Province/State", "Country/Region"}.issubset(data.columns): # JHU global table
+        group_cols = ["Province/State", "Country/Region"]
+    elif {"Combined_Key"}.issubset(data.columns): # JHU USA table
+        group_cols = ["Combined_Key"]
+    elif {"county", "state"}.issubset(data.columns): # NYT USA state and county table
+        group_cols = ["county", "state"]
+    elif {"state"}.issubset(data.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
+        group_cols = ["state"]
+    else:
+        raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{data.columns}")
+
+    for iter_data_type in data_types:
+
+        if iter_data_type not in data.columns:
+            raise ParameterError(f"There is no '{iter_data_type}' column in the dataframe you passed. Existing columns: \n{data.columns}")
+
+        # Duplicate grouping cols, since they'll be lost when used for grouping
+        for group_col in group_cols:
+            data = data.assign(**{group_col + "_group": data[group_col]})
+
+        # Add the suffix to the group_cols list, so we group by (and lose) the duplicated columns
+        suffix_group_cols = [col + "_group" for col in group_cols]
+
+        # Duplicate the count col so we can keep the cumulative counts if desired
+        daily_col = "daily_" + iter_data_type
+        data = data.assign(**{daily_col: data[iter_data_type]})
+
+        # Put all columns besides the duplicates we created into the index, so they aren't affected by the groupby
+        id_cols = data.columns[~data.columns.isin(suffix_group_cols + [daily_col])].tolist()
+        data = data.set_index(id_cols)
+
+        # Fill NaNs in grouping cols (fillna excludes index)
+        data = data.fillna(0)
+
+        # Group by location and calculate daily counts with our helper function _offset_subtract
+        data = data.groupby(suffix_group_cols).transform(_offset_subtract)
+
+        # Take the other columns out of the index
+        data = data.reset_index()
+
+        if not keep_cumulative:
+            data = data.drop(columns=iter_data_type) # Drop the original cumulative count column
+
+    if wide:
+        data = _long_to_wide(data, data_type, possible_data_types=["daily_cases", "daily_deaths", "daily_recovered"]) # Since it originally came from a wide format, we wouldn't need to drop extra count columns because they wouldn't exist, but we pass the custom possible_data_types just in case implementation changes.
+        
+    return data
+
+
 #def replace_date_with_days_from_min_count(data, data_type, min_count, drop_date=True):
 #    """Create a column where the value for each row is the number of days since the country/region in that row had a particular count of cases, deaths, or recoveries. You can then index by this column to compare how different countries were doing after similar amounts of time from first having infections.
 #
@@ -157,27 +223,39 @@ def _wide_to_long(data, data_type):
 
     return data
 
-def _long_to_wide(data, data_type):
+def _long_to_wide(data, data_type, possible_data_types=["cases", "deaths", "recovered"]):
     """Convert a dataframe from long format to wide format.
 
     Parameters:
     data (pandas.DataFrame): The dataframe to convert. Must have a column called "date".
     data_type (str): The name of the data type to keep when we pivot. Either "cases", "deaths", or "recovered".
+    possible_data_types (list of str, optional): A list of other data_type columns that may exist in the table, which will be dropped. Default is the standard data types ["cases", "deaths", "recovered"]
 
     Returns:
     pandas.DataFrame: The dataframe in wide format.
     """
     # If there are multiple data type columns, only keep the one specified
-    possible_data_types = ["cases", "deaths", "recovered"]
     cols_to_drop = [col for col in possible_data_types if col != data_type and col in data.columns]
     data = data.drop(columns=cols_to_drop)
 
     # Spread the table, a la tidyr
     id_cols = [col for col in data.columns if col != data_type]
-    data = data.set_index(id_cols)
+    data = data.set_index(id_cols) # Putting these in the index keeps them from being spread
     data = data.unstack(level=0, fill_value=0)
     data.columns = data.columns.droplevel(0)
     data.columns.name = None
-    data = data.reset_index()
+    data = data.reset_index() # Take the saved columns out of the index
 
     return data
+
+def _offset_subtract(col):
+    """Takes a column, creates a copy with all values moved down by one (last value dropped, zero inserted at start), then subtracts the copy from the original and returns the result. For use with dataframe.groupby(...).transform().
+
+    col (pandas.Series): The column to transform.
+
+    Returns:
+    pandas.Series: The transformed column.
+    """
+    offset = col.values[:-1]
+    offset = np.insert(offset, 0, 0)
+    return col - offset

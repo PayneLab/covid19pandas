@@ -125,7 +125,7 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
     if region == "global":
         all_df = all_df.sort_index(level=["date", "Country/Region", "Province/State"])
     elif region == "us":
-        all_df = all_df.sort_index(level=["date", "UID"])
+        all_df = all_df.sort_index(level=["date", "Country_Region", "Province_State", "Admin2"])
 
     # Reorder index so date is first
     idx_names = list(all_df.index.names)
@@ -231,6 +231,7 @@ def _get_table(base_url, file_name, source, update):
     # Formatting fixes
     if source == "jhu":
         df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore")).map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x)
+        df = df.replace(to_replace="Taiwan*", value="Taiwan", regex=False)
     if "Long_" in df.columns:
         df = df.rename(columns={"Long_": "Long"})
 
