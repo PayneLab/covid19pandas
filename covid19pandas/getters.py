@@ -233,7 +233,7 @@ def _get_table(base_url, file_name, source, update):
     if source == "jhu":
         df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore")).map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x)
         df = df.replace(to_replace="Taiwan*", value="Taiwan", regex=False)
-    if "Long_" in df.columns:
-        df = df.rename(columns={"Long_": "Long"})
+        df = df.rename(columns={"Long_": "Long"}, errors="ignore")
+        df = df[~((df["Province/State"] == "Recovered") & (df["Country/Region"] == "Canada"))]
 
     return df
