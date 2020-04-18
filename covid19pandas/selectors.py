@@ -236,13 +236,14 @@ def _wide_to_long(data, data_type):
 
     return data
 
-def _long_to_wide(data, data_type, possible_data_types=["cases", "deaths", "recovered"]):
+def _long_to_wide(data, data_type, possible_data_types=["cases", "deaths", "recovered"], sort_by=None):
     """Convert a dataframe from long format to wide format.
 
     Parameters:
     data (pandas.DataFrame): The dataframe to convert. Must have a column called "date".
     data_type (str): The name of the data type to keep when we pivot. Either "cases", "deaths", or "recovered".
     possible_data_types (list of str, optional): A list of other data_type columns that may exist in the table, which will be dropped. Default is the standard data types ["cases", "deaths", "recovered"]
+    sort_by (str, optional): The name of one of the indexing columns to sort the dataframe by before returning it. Default of None causes no extra sorting to be performed.
 
     Returns:
     pandas.DataFrame: The dataframe in wide format.
@@ -256,8 +257,10 @@ def _long_to_wide(data, data_type, possible_data_types=["cases", "deaths", "reco
     data = data.set_index(id_cols) # Putting these in the index keeps them from being spread
     data = data.unstack(level=0, fill_value=0)
     data.columns = data.columns.droplevel(0)
-    data.columns = data.columns.map(lambda x: x.date()) # We don't want the whole timestamp
+    data.columns = data.columns.map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x) # We don't want the whole timestamp
     data.columns.name = None
+    if sort_by is not None:
+        data = data.sort_index(level=sort_by)
     data = data.reset_index() # Take the saved columns out of the index
 
     return data

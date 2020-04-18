@@ -44,7 +44,6 @@ class TestGetters:
                         else:
                             df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
                             assert df.shape[0] > 0 and df.shape[1] > 0
-                            df.to_csv("out.txt", mode="a")
 
     def test_get_data_nyt(self):
         for format in formats:
@@ -60,7 +59,6 @@ class TestGetters:
                         else:
                             df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
                             assert df.shape[0] > 0 and df.shape[1] > 0
-                            df.to_csv("out.txt", mode="a")
 
     def test_deprecated_getters(self):
         df = cod.get_cases()

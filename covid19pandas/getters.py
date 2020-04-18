@@ -18,6 +18,7 @@ import os
 import warnings
 import datetime
 from .download import download_github_file
+from .selectors import _wide_to_long, _long_to_wide
 from .exceptions import *
 
 # Old getters
@@ -95,50 +96,43 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
     }
 
     if format == "wide":
-        print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
-        return _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
+        df = _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
 
-    # Get the requested table types
-    dfs = {}
-    if data_type == "all":
-        for iter_data_type in file_names[region].keys():
-             dfs[iter_data_type] = _get_table(base_url, file_names[region][iter_data_type], source="jhu", update=update)
-    else:
-         dfs[data_type] = _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
+    else: # format == "long":
+        # Get the requested table types
+        dfs = {}
+        if data_type == "all":
+            for iter_data_type in file_names[region].keys():
+                 dfs[iter_data_type] = _get_table(base_url, file_names[region][iter_data_type], source="jhu", update=update)
+        else:
+             dfs[data_type] = _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
 
-    # Gather the tables into long format (a la tidyr), and join into one table
-    all_df = None
-    for iter_data_type, df in dfs.items():
+        # Gather the tables into long format (a la tidyr), and join into one table
+        all_df = None
+        for iter_data_type, df in dfs.items():
 
-        id_cols = [col for col in df.columns if not issubclass(type(col), datetime.date)]
-        df = pd.melt(df, id_vars=id_cols, var_name="date", value_name=iter_data_type)
-        df = df[df[iter_data_type] != 0] # Drop rows of zeros
+            df = _wide_to_long(df, iter_data_type)
+            id_cols = df.columns[df.columns != iter_data_type].tolist()
+            df = df.set_index(id_cols)
 
-        id_cols.append("date")
-        if all_df is None:
-            all_df = pd.DataFrame(columns=id_cols)
-            all_df = all_df.set_index(id_cols)
+            if all_df is None:
+                all_df = pd.DataFrame(columns=id_cols)
+                all_df = all_df.set_index(id_cols)
 
-        df = df.set_index(id_cols)
-        all_df = all_df.join(df, how="outer")
+            all_df = all_df.join(df, how="outer")
 
-    if region == "global":
-        all_df = all_df.sort_index(level=["date", "Country/Region", "Province/State"])
-    elif region == "us":
-        all_df = all_df.sort_index(level=["date", "Country_Region", "Province_State", "Admin2"])
+        if region == "global":
+            all_df = all_df.sort_index(level=["date", "Country/Region", "Province/State"])
+        elif region == "us":
+            all_df = all_df.sort_index(level=["date", "Country_Region", "Province_State", "Admin2"])
 
-    # Reorder index so date is first
-    idx_names = list(all_df.index.names)
-    idx_names.remove("date")
-    new_idx_name_order = ["date"] + idx_names
-    all_df = all_df.reorder_levels(new_idx_name_order)
-
-    all_df = all_df.fillna(0)
-    all_df = all_df.astype('int64')
-    all_df = all_df.reset_index()
+        all_df = all_df.fillna(0)
+        all_df = all_df.astype('int64')
+        all_df = all_df.reset_index()
+        df = all_df
 
     print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
-    return all_df
+    return df
 
 def get_data_nyt(format="long", data_type="all", counties=False, update=True):
     """Get the most current data tables from NYT (https://github.com/nytimes/covid-19-data).
@@ -179,19 +173,9 @@ def get_data_nyt(format="long", data_type="all", counties=False, update=True):
     elif data_type == "deaths":
         df = df.drop(columns="cases")
 
-    if format == "long":
-        print("These data were obtained from The New York Times (https://github.com/nytimes/covid-19-data).")
-        return df
-
-    # Spread table into wide format, a la tidyr
-    id_cols = [col for col in df.columns if col != data_type]
-    df = df.set_index(id_cols)
-    df = df.unstack(level=0, fill_value=0)
-    df.columns = df.columns.droplevel(0)
-    df.columns = df.columns.map(lambda x: pd.to_datetime(x).date())
-    df.columns.name = None
-    df = df.sort_index(level="state")
-    df = df.reset_index()
+    if format == "wide":
+        # Spread table into wide format, a la tidyr
+        df = _long_to_wide(df, data_type, sort_by="state")
 
     print("These data were obtained from The New York Times (https://github.com/nytimes/covid-19-data).")
     return df
@@ -234,6 +218,7 @@ def _get_table(base_url, file_name, source, update):
         df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore")).map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x)
         df = df.replace(to_replace="Taiwan*", value="Taiwan", regex=False)
         df = df.rename(columns={"Long_": "Long"}, errors="ignore")
-        df = df[~((df["Province/State"] == "Recovered") & (df["Country/Region"] == "Canada"))]
+        if "Province/State" in df.columns and "Country/Region" in df.columns:
+            df = df[~((df["Province/State"] == "Recovered") & (df["Country/Region"] == "Canada"))]
 
     return df
