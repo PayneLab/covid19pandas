@@ -121,6 +121,8 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
 
             all_df = all_df.join(df, how="outer")
 
+        all_df = all_df.drop_duplicates(keep="first") # Duplicate rows may have been created by the joins if there were NaNs in any of the id_cols
+
         if region == "global":
             all_df = all_df.sort_index(level=["date", "Country/Region", "Province/State"])
         elif region == "us":

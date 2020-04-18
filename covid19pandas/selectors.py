@@ -85,13 +85,12 @@ def calc_x_day_avg(data, x=3):
     """
     pass
 
-def calc_daily_change(data, data_type="all", keep_cumulative=False):
+def calc_daily_change(data, data_type="all"):
     """Get the daily change in the number of cases/deaths/recoveries, instead of cumulative counts.
     
     Parameters:
     data (pandas.DataFrame): The cumulative counts from which to calculate the daily change.
     data_type (str): When your table contains multiple count types (e.g. cases, deaths, recovered), use this parameter to specify which columns you want to calculate the daily change for. Other columns will be left unchanged. Default "all".
-    keep_cumulative (bool, optional): Whether to keep the original column of cumulative counts next to the new daily change column; otherwise drop it. Default False.
     
     Returns:
     pandas.DataFrame: The same table, but with daily change in counts. The column is named "daily_" + data_type
@@ -99,9 +98,6 @@ def calc_daily_change(data, data_type="all", keep_cumulative=False):
     wide = False
     if "date" not in data.columns:
         wide = True
-
-    if wide and keep_cumulative:
-        raise ParameterError("Cannot keep cumulative counts when given a wide format table. Either use a long format table, or pass keep_cumulative=False.")
 
     if data_type == "all":
         if wide:
@@ -172,37 +168,70 @@ def calc_daily_change(data, data_type="all", keep_cumulative=False):
             # Group by location and calculate daily counts with our helper function _offset_subtract
             data = data.groupby(suffix_group_cols).transform(_offset_subtract)
 
-            # Take the other columns out of the index
+            # Take the other columns back out of the index
             data = data.reset_index()
-
-            if not keep_cumulative:
-                data = data.drop(columns=iter_data_type) # Drop the original cumulative count column
 
     return data
 
 
-#def replace_date_with_days_from_min_count(data, data_type, min_count, drop_date=True):
-#    """Create a column where the value for each row is the number of days since the country/region in that row had a particular count of cases, deaths, or recoveries. You can then index by this column to compare how different countries were doing after similar amounts of time from first having infections.
-#
-#    Parameters:
-#    
-#    Returns:
-#    pandas.DataFrame: The original table, with days since the xth case/death/recovery.
-#    """
-#country_day_cts = pd.DataFrame(columns=["day", "Country/Region", data_type]) # We'll append everything to this
-#for country in top_names.index:
-#
-#        country_tbl = country_groups.get_group(country)
-#        country_tbl = country_tbl[country_tbl[data_type] >= min_count] # Select only days with 100 or more cases
-#        assert(country_tbl["date"].duplicated().sum() == 0) # Verify there are no duplicate days
-#
-#        day_number_col = range(0, len(country_tbl.index)) # Generate a column of day number since 100 cases
-#        country_tbl.insert(loc=0, column="day", value=day_number_col) # Insert the column
-#        country_tbl = country_tbl.drop(columns="date") # We don't need the date column anymore
-#
-#        country_day_cts = pd.concat([country_day_cts, country_tbl]).sort_values(by="day")
-#
+def calc_days_from_min_count(data, data_type, min_count, group_by):
+    """Create a column where the value for each row is the number of days since the country/region in that row had a particular count of cases, deaths, or recoveries. You can then index by this column to compare how different countries were doing after similar amounts of time from first having infections.
+
+    Parameters:
+    data (pandas.DataFrame): The dataframe to do the calculation for.
+    data_type (str): The data type you want the days since the minimum count of. If other data types are present in the table, they will also be kept for days that pass the cutoff in this data type.
+    min_count (int): The minimum number of cases, deaths, or recovered that you want to start counting from for each country/region.
+    group_by (str or list of str): The column(s) that uniquely identify each region for each day.
+    
+    Returns:
+    pandas.DataFrame: The original table, with days since the xth case/death/recovery. Note: This function only outputs data in long format tables, since wide format tables would be messy with this transformation.
+    """
+    date_col = "date"
+
+    # Allow them to pass either a string for one column, or a list of str for several columns.
+    if isinstance(group_by, str): 
+        group_by = [group_by]
+
+    # If they give us a wide format table, convert it to long format.
+    if "date" not in data.columns:
+        data = _wide_to_long(data, data_type) 
+
+    # Drop all rows for days that don't meet the minimum count
+    data = data[data[data_type] >= min_count] 
+
+    # Check no duplicate dates in each group
+    if data.duplicated(subset=[date_col] + group_by).any():
+        raise ParameterError("The combination of grouping columns you passed does not uniquely identify each row for each day. Either pass a different set of grouping columns, or aggregate the counts for each combination of day and grouping columns before using this function.")
+
+    # Duplicate grouping cols, since they'll be lost when used for grouping
+    for group_col in group_by:
+        data = data.assign(**{group_col + "_group": data[group_col]})
+
+    # Add the suffix to the group_cols list, so we group by (and lose) the duplicated columns
+    suffix_group_cols = [col + "_group" for col in group_by]
+
+    # Duplicate the date col so we can keep the original dates if desired
+    days_since_col = f"days_since_{min_count}_{data_type}"
+    data = data.assign(**{days_since_col: data[date_col]})
+
+    # Put the non-grouping and non-date columns in the index, so they don't get changed
+    data = data.sort_values(by="date") # This will make sure eveything is in the right order to generate days since the cutoff
+    id_cols = data.columns[~data.columns.isin(suffix_group_cols + [days_since_col])].tolist()
+    data = data.set_index(id_cols)
+
+    # Fill NaNs in grouping cols (fillna excludes index)
+    data = data.fillna(0)
+
+    # Separate the groups, and calculate the number of days since the specified count
+    data = data.groupby(suffix_group_cols).transform(lambda col: pd.Series(data=range(0, len(col)), index=col.index))
+
+    # Take the other columns back out of the index
+    data = data.reset_index()
+
+    # Do we need this?
 #    country_day_cts = country_day_cts.apply(pd.to_numeric, errors="ignore")
+
+    return data
 
 # Helper functions
 def _wide_to_long(data, data_type):

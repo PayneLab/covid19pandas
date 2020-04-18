@@ -16,44 +16,55 @@ import pandas as pd
 import numpy as np
 import datetime
 
-formats = ["long", "wide"]
 jhu_data_types = ["all", "cases", "deaths", "recovered"]
 jhu_regions = ["global", "us"]
-update_options = [True, False]
 
 nyt_data_types = ["all", "cases", "deaths"]
 nyt_county_options = [True, False]
 
 class TestSelectors:
-    def test_calc_daily_change(self):
 
-        # Iterate through all official table possibilities
+    @classmethod
+    def setup_class(cls):
+        """Ensures that all data tables have been recently downloaded, so we can skip the update in all our tests to improve speed."""
+        cod.get_data_jhu(data_type="all", region="global", update=True)
+        cod.get_data_jhu(data_type="all", region="us", update=True)
 
-        # JHU tables
-        for format in formats:
-            for data_type in jhu_data_types:
-                for region in jhu_regions:
-                    for update_option in update_options:
+        cod.get_data_nyt(data_type="all", counties=False, update=True)
+        cod.get_data_nyt(data_type="all", counties=True, update=True)
 
-                        # Check that logic errors get caught
-                        if (region == "us" and data_type == "recovered") or (format == "wide" and data_type == "all"):
-                            pass # Invalid table parameter combinations
-                        else:
-                            df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
-                            self._check_daily_change(df, data_type, format)
+    def test_calc_daily_change_jhu(self):
+        for data_type in jhu_data_types:
+            for region in jhu_regions:
+                if region == "us" and data_type == "recovered":
+                    pass # Invalid table parameter combination
+                else:
+                    df = cod.get_data_jhu(format="long", data_type=data_type, region=region, update=False)
+                    self._check_daily_change(df, data_type, format="long")
 
-        # NYT tables
-        for format in formats:
-            for data_type in nyt_data_types:
-                for county_option in nyt_county_options:
-                    for update_option in update_options:
+    def test_calc_daily_change_jhu_wide(self):
+        for data_type in jhu_data_types:
+            for region in jhu_regions:
+                if (region == "us" and data_type == "recovered") or data_type == "all":
+                    pass # Invalid table parameter combination
+                else:
+                    df = cod.get_data_jhu(format="wide", data_type=data_type, region=region, update=False)
+                    self._check_daily_change(df, data_type, format="wide")
 
-                        # Check that logic errors get caught
-                        if format == "wide" and data_type == "all":
-                            pass # Invalid table parameter combinations
-                        else:
-                            df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
-                            self._check_daily_change(df, data_type, format)
+    def test_calc_daily_change_nyt_long(self):
+        for data_type in nyt_data_types:
+            for county_option in nyt_county_options:
+                df = cod.get_data_nyt(format="long", data_type=data_type, counties=county_option, update=False)
+                self._check_daily_change(df, data_type, format="long")
+
+    def test_calc_daily_change_nyt_wide(self):
+        for data_type in nyt_data_types:
+            for county_option in nyt_county_options:
+                if data_type == "all":
+                    pass # Invalid table parameter combination
+                else:
+                    df = cod.get_data_nyt(format="wide", data_type=data_type, counties=county_option, update=False)
+                    self._check_daily_change(df, data_type, format="wide")
 
     # Helper methods
     def _check_daily_change(self, df, data_type, format):

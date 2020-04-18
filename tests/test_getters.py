@@ -13,6 +13,8 @@ import covid19pandas as cod
 import covid19pandas.exceptions as codex
 
 import pytest
+import numpy as np
+import datetime
 
 formats = ["long", "wide"]
 jhu_data_types = ["all", "cases", "deaths", "recovered"]
@@ -43,7 +45,18 @@ class TestGetters:
 
                         else:
                             df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
+
+                            # Check dimensions
                             assert df.shape[0] > 0 and df.shape[1] > 0
+
+                            # Check that there aren't duplicates
+                            assert not df.duplicated().any()
+
+                            # Check for proper date types
+                            if format == "long":
+                                assert df["date"].dtype == np.dtype('datetime64[ns]')
+                            elif format == "wide":
+                                assert df.columns.map(lambda x: issubclass(type(x), datetime.date)).any()
 
     def test_get_data_nyt(self):
         for format in formats:
@@ -57,8 +70,18 @@ class TestGetters:
                                 cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
                             assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'."
                         else:
-                            df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
+
+                            # Check dimensions
                             assert df.shape[0] > 0 and df.shape[1] > 0
+
+                            # Check that there aren't duplicates
+                            assert not df.duplicated().any()
+
+                            # Check for proper date types
+                            if format == "long":
+                                assert df["date"].dtype == np.dtype('datetime64[ns]')
+                            elif format == "wide":
+                                assert df.columns.map(lambda x: issubclass(type(x), datetime.date)).any()
 
     def test_deprecated_getters(self):
         df = cod.get_cases()
