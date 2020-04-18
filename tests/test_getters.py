@@ -24,7 +24,7 @@ nyt_county_options = [True, False]
 
 class TestGetters:
 
-    def test_get_data_jhu():
+    def test_get_data_jhu(self):
         for format in formats:
             for data_type in jhu_data_types:
                 for region in jhu_regions:
@@ -34,19 +34,19 @@ class TestGetters:
                         if region == "us" and data_type == "recovered":
                             with pytest.raises(codex.ParameterError) as excinfo:
                                 cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
-                            assert str(excinfo.value) == "JHU does not provide recovery data for US states/counties.":
+                            assert str(excinfo.value) == "JHU does not provide recovery data for US states/counties."
 
                         elif format == "wide" and data_type == "all":
                             with pytest.raises(codex.ParameterError) as excinfo:
                                 cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
-                            assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.":
+                            assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'."
 
                         else:
                             df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=update_option)
-                            assert df.shape[0] > 0 and df.shape[1] > 0:
+                            assert df.shape[0] > 0 and df.shape[1] > 0
                             df.to_csv("out.txt", mode="a")
 
-    def test_get_data_nyt():
+    def test_get_data_nyt(self):
         for format in formats:
             for data_type in nyt_data_types:
                 for county_option in nyt_county_options:
@@ -56,16 +56,16 @@ class TestGetters:
                         if format == "wide" and data_type == "all":
                             with pytest.raises(codex.ParameterError) as excinfo:
                                 cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
-                            assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'.":
+                            assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'."
                         else:
                             df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
-                            assert df.shape[0] > 0 and df.shape[1] > 0:
+                            assert df.shape[0] > 0 and df.shape[1] > 0
                             df.to_csv("out.txt", mode="a")
 
-    def test_deprecated_getters():
+    def test_deprecated_getters(self):
         df = cod.get_cases()
-        assert df.shape[0] > 0 and df.shape[1] > 0:
+        assert df.shape[0] > 0 and df.shape[1] > 0
         df = cod.get_deaths()
-        assert df.shape[0] > 0 and df.shape[1] > 0:
+        assert df.shape[0] > 0 and df.shape[1] > 0
         df = cod.get_recovered()
-        assert df.shape[0] > 0 and df.shape[1] > 0:
+        assert df.shape[0] > 0 and df.shape[1] > 0
