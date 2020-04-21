@@ -174,7 +174,7 @@ def calc_daily_change(data, data_type="all"):
     return data
 
 
-def calc_days_from_min_count(data, data_type, min_count, group_by):
+def calc_days_since_min_count(data, data_type, min_count, group_by):
     """Create a column where the value for each row is the number of days since the country/region in that row had a particular count of cases, deaths, or recoveries. You can then index by this column to compare how different countries were doing after similar amounts of time from first having infections.
 
     Parameters:
@@ -228,8 +228,8 @@ def calc_days_from_min_count(data, data_type, min_count, group_by):
     # Take the other columns back out of the index
     data = data.reset_index()
 
-    # Do we need this?
-#    country_day_cts = country_day_cts.apply(pd.to_numeric, errors="ignore")
+    # Sort the table
+    data = data.sort_values(by=[date_col] + group_by)
 
     return data
 
@@ -286,7 +286,6 @@ def _long_to_wide(data, data_type, possible_data_types=["cases", "deaths", "reco
     data = data.set_index(id_cols) # Putting these in the index keeps them from being spread
     data = data.unstack(level=0, fill_value=0)
     data.columns = data.columns.droplevel(0)
-    data.columns = data.columns.map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x) # We don't want the whole timestamp
     data.columns.name = None
     if sort_by is not None:
         data = data.sort_index(level=sort_by)

@@ -70,6 +70,7 @@ class TestGetters:
                                 cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
                             assert str(excinfo.value) == "'wide' table format only allows one data type. You requested 'all'. Please pass 'cases', 'deaths', or 'recovered'."
                         else:
+                            df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=update_option)
 
                             # Check dimensions
                             assert df.shape[0] > 0 and df.shape[1] > 0

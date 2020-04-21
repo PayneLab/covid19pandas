@@ -217,10 +217,13 @@ def _get_table(base_url, file_name, source, update):
 
     # Formatting fixes
     if source == "jhu":
-        df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore")).map(lambda x: x.date() if isinstance(x, pd.Timestamp) else x)
+        df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore"))
         df = df.replace(to_replace="Taiwan*", value="Taiwan", regex=False)
         df = df.rename(columns={"Long_": "Long"}, errors="ignore")
         if "Province/State" in df.columns and "Country/Region" in df.columns:
             df = df[~((df["Province/State"] == "Recovered") & (df["Country/Region"] == "Canada"))]
+
+    if source == "nyt":
+        df = df.astype({"date": 'datetime64'})
 
     return df

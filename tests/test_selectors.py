@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import datetime
 
+formats = ["wide", "long"]
 jhu_data_types = ["all", "cases", "deaths", "recovered"]
 jhu_regions = ["global", "us"]
 
@@ -33,7 +34,15 @@ class TestSelectors:
         cod.get_data_nyt(data_type="all", counties=False, update=True)
         cod.get_data_nyt(data_type="all", counties=True, update=True)
 
-    def test_calc_daily_change_jhu(self):
+        pd.options.display.max_rows = 60
+        pd.options.display.max_columns = 10
+        pd.options.display.width = None
+        pd.options.display.min_rows = None
+
+    # -------------------------------------------------------------------------------------------------------------
+    # Tests for calc_daily_change
+    # -------------------------------------------------------------------------------------------------------------
+    def test_calc_daily_change_jhu_long(self):
         for data_type in jhu_data_types:
             for region in jhu_regions:
                 if region == "us" and data_type == "recovered":
@@ -65,8 +74,46 @@ class TestSelectors:
                 else:
                     df = cod.get_data_nyt(format="wide", data_type=data_type, counties=county_option, update=False)
                     self._check_daily_change(df, data_type, format="wide")
+    # -------------------------------------------------------------------------------------------------------------
+    # Tests for calc_days_since_min_count
+    # -------------------------------------------------------------------------------------------------------------
+    def test_calc_days_since_min_count_jhu(self):
+        for format in formats:
+            for data_type in jhu_data_types:
+                for region in jhu_regions:
+                    if (region == "us" and data_type == "recovered") or (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
+                        if data_type == "all":
 
+                            count_by_types = set(jhu_data_types)
+                            count_by_types.remove("all")
+                            if region == "us":
+                                count_by_types.remove("recovered")
+
+                            for count_by_type in count_by_types:
+                                self._check_days_since(df, count_by_type)
+                        else:
+                            self._check_days_since(df, data_type)
+
+    def test_calc_days_since_min_count_nyt(self):
+        for format in formats:
+            for data_type in nyt_data_types:
+                for county_option in nyt_county_options:
+                    if (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
+                        if data_type == "all":
+                            for count_by_type in [type for type in nyt_data_types if type != "all"]:
+                                self._check_days_since(df, count_by_type)
+                        else:
+                            self._check_days_since(df, data_type)
+
+    # -------------------------------------------------------------------------------------------------------------
     # Helper methods
+    # -------------------------------------------------------------------------------------------------------------
     def _check_daily_change(self, df, data_type, format):
         """Verifies that when df is passed to calc_daily_change, the daily count columns generated are correct.
 
@@ -145,3 +192,31 @@ class TestSelectors:
 
         else:
             raise Exception(f"Invalid format '{format}'")
+
+    def _check_days_since(self, df, data_type):
+        """Verifies that when df is passed to calc_days_since_min_count, the functions works.
+
+        df (pandas.DataFrame): A dataframe from the package.
+        data_type (str): The data type the table is for. Either "cases", "deaths", "recovered", or "all".
+
+        Returns:
+        None
+        """
+
+        # Search for defined grouping cols (based on data source and region)
+        if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
+            group_cols = ["Province/State", "Country/Region"]
+        elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+            group_cols = ["Combined_Key"]
+        elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
+            group_cols = ["county", "state"]
+        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
+            group_cols = ["state"]
+        else:
+            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
+        # Call the function
+        ct = cod.calc_days_since_min_count(df, data_type, min_count=100, group_by=group_cols)
+
+        # Just print the output for now. We'll add more intense tests later.
+        print(ct)
