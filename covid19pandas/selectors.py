@@ -60,18 +60,41 @@ def select_top_x_regions(data, region_col, data_type, x, combine_subregions, exc
 
     return top_x_cts
 
-def select_regions(data, region_col, regions, combine_subregions=True):
+def select_regions(data, region_col, regions, combine_subregions):
     """Select all data for particular regions within a table, optionally summing counts for subregions into one count for each region for each day.
     
     Parameters:
     data (pandas.DataFrame): The dataframe from which to select data.
     region_col (str): The name of the column that contains the region designation you're specifying by. E.g., if you want to select particular states, pass the name of the state column
-    regions (list of str): The regions to select.
+    regions (str or list of str): The regions to select.
     combine_subregions (bool, optional): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Otherwise, keeps the region broken into subregions. Default True.
 
     Returns:
     pandas.DataFrame: The data for the specified regions.
     """
+    # Allow them to pass either a string for one column, or a list of str for several columns.
+    if isinstance(regions, str):
+        regions = [regions]
+
+    # Select the data
+    data = data[data[region_col].isin(regions)]
+
+    # Aggregate, if desired
+    if combine_subregions:
+        if "date" in data.columns: # Long format table
+            group_cols = ["date", region_col]
+        else:
+            group_cols = [region_col] # Wide format table
+
+        data = data.groupby(group_cols).aggregate(np.sum)
+        data = data.reset_index()
+
+        # Drop columns that would've been messed up by the aggregation
+        cols_to_not_drop = group_cols + ["cases", "deaths", "recovered"]
+        cols_to_drop = [col for col in data.columns if col not in cols_to_not_drop and not issubclass(type(col), datetime.date)]
+        data = data.drop(columns=cols_to_drop)
+
+    return data
 
 def calc_x_day_avg(data, x=3):
     """Take a table of daily counts, and average the counts for each set of x consecutive days (e.g., a 3 day average).
