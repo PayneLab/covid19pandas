@@ -15,6 +15,7 @@ import covid19pandas.exceptions as codex
 import pandas as pd
 import numpy as np
 import datetime
+import pytest
 
 formats = ["wide", "long"]
 jhu_data_types = ["all", "cases", "deaths", "recovered"]
@@ -23,6 +24,7 @@ jhu_regions = ["global", "us"]
 nyt_data_types = ["all", "cases", "deaths"]
 nyt_county_options = [True, False]
 
+@pytest.mark.filterwarnings("ignore::covid19pandas.exceptions.FileNotUpdatedWarning")
 class TestSelectors:
 
     @classmethod
@@ -34,10 +36,95 @@ class TestSelectors:
         cod.get_data_nyt(data_type="all", counties=False, update=True)
         cod.get_data_nyt(data_type="all", counties=True, update=True)
 
+        # Set pandas display options for when we print tables
         pd.options.display.max_rows = 60
         pd.options.display.max_columns = 10
         pd.options.display.width = None
         pd.options.display.min_rows = None
+
+    # -------------------------------------------------------------------------------------------------------------
+    # Tests for select_top_x_regions
+    # -------------------------------------------------------------------------------------------------------------
+    def test_select_top_x_jhu(self):
+        for format in formats:
+            for data_type in jhu_data_types:
+                for region in jhu_regions:
+                    if (region == "us" and data_type == "recovered") or (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
+
+                        if data_type == "all":
+                            compare_by_types = set(jhu_data_types)
+                            compare_by_types.remove("all")
+                            if region == "us":
+                                compare_by_types.remove("recovered")
+
+                            for compare_by_type in compare_by_types:
+                                self._check_select_top_x(df, compare_by_type)
+                        else:
+                            self._check_select_top_x(df, data_type)
+
+    def test_select_top_x_nyt(self):
+        for format in formats:
+            for data_type in nyt_data_types:
+                for county_option in nyt_county_options:
+                    if (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
+
+                        if data_type == "all":
+                            for compare_by_type in [type for type in nyt_data_types if type != "all"]:
+                                self._check_days_since(df, compare_by_type)
+                        else:
+                            self._check_select_top_x(df, data_type)
+
+    # -------------------------------------------------------------------------------------------------------------
+    # Tests for select_regions
+    # -------------------------------------------------------------------------------------------------------------
+    def test_select_regions_jhu(self):
+        for format in formats:
+            for data_type in jhu_data_types:
+                for region in jhu_regions:
+                    if (region == "us" and data_type == "recovered") or (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
+                        self._check_select_regions(df)
+
+    def test_select_regions_nyt(self):
+        for format in formats:
+            for data_type in nyt_data_types:
+                for county_option in nyt_county_options:
+                    if (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
+                        self._check_select_regions(df)
+
+    # -------------------------------------------------------------------------------------------------------------
+    # Tests for calc_x_day_avg
+    # -------------------------------------------------------------------------------------------------------------
+    def test_calc_x_day_avg_jhu(self):
+        for format in formats:
+            for data_type in jhu_data_types:
+                for region in jhu_regions:
+                    if (region == "us" and data_type == "recovered") or (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
+                        self._check_calc_x_day_avg(df, data_type)
+
+    def test_calc_x_day_avg_nyt(self):
+        for format in formats:
+            for data_type in nyt_data_types:
+                for county_option in nyt_county_options:
+                    if (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
+                        self._check_calc_x_day_avg(df, data_type)
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_daily_change
@@ -114,6 +201,57 @@ class TestSelectors:
     # -------------------------------------------------------------------------------------------------------------
     # Helper methods
     # -------------------------------------------------------------------------------------------------------------
+    def _check_select_top_x(self, df, data_type):
+
+        # Search for defined region cols (based on data source)
+        if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
+            region_col = "Country/Region"
+            exclude = ["US", "China"]
+        elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+            region_col = "Province_State"
+            exclude = ["Washington", "Illinois"]
+        elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table.
+            region_col = "state"
+            exclude = ["Washington", "Illinois"]
+        else:
+            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
+        # Call the function
+        top = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True)        
+        top_uncombined = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=False)        
+        top_with_exclusions = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, exclude=exclude)        
+
+        # Just print the output for now. We'll add more intense tests later.
+        print(top)
+        print(top_uncombined)
+        print(top_with_exclusions)
+
+    def _check_select_regions(self, df):
+
+        # Search for defined region cols (based on data source)
+        if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
+            region_col = "Country/Region"
+            regions = ["US", "China", "Turkey"]
+        elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+            region_col = "Province_State"
+            regions = ["Washington", "New York", "Arizona"]
+        elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table.
+            region_col = "state"
+            regions = ["Washington", "New York", "Arizona"]
+        else:
+            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
+        # Call the function
+        selected = cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=True)
+        selected_uncombined = cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=False)
+
+        # Just print the output for now. We'll add more intense tests later.
+        print(selected)
+        print(selected_uncombined)
+
+    def _check_calc_x_day_avg(self, df):
+        pass
+
     def _check_daily_change(self, df, data_type, format):
         """Verifies that when df is passed to calc_daily_change, the daily count columns generated are correct.
 

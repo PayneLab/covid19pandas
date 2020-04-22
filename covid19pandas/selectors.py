@@ -47,6 +47,7 @@ def select_top_x_regions(data, region_col, data_type, x, combine_subregions, exc
     current_ct = long_data[long_data['date'] == last_day] # Pull all records for that day
     current_ct = long_data[['date', region_col, data_type]]
     current_ct = current_ct[~current_ct[region_col].isin(exclude)] # Select only columns where the region_col value is not in the exclude list
+    current_ct = current_ct.fillna("n/a") # Fill NaNs so they aren't excluded in groupby
     current_ct = current_ct.groupby(region_col).aggregate(np.sum) # Sum all counts for today in subregions within that regions
 
     top_x_names = current_ct.sort_values(by=data_type).tail(x) # Get the names of the top regions
@@ -56,7 +57,11 @@ def select_top_x_regions(data, region_col, data_type, x, combine_subregions, exc
         cols_to_drop = [col for col in top_x_cts.columns if col not in ["date", region_col, data_type] and not issubclass(type(col), datetime.date)]
         top_x_cts = top_x_cts.drop(columns=cols_to_drop)
         id_cols = top_x_cts.columns[top_x_cts.columns.isin(["date", region_col])].tolist()
+
+        for id_col in id_cols:
+            top_x_cts[id_col] = top_x_cts[id_col].fillna("n/a") # Fill NaNs so they aren't excluded in groupby
         top_x_cts = top_x_cts.groupby(id_cols).aggregate(np.sum).reset_index() # Sum up total cases per day, per country
+        top_x_cts = top_x_cts.replace(to_replace="n/a", value=np.nan) # Put the NaNs back in
 
     return top_x_cts
 
@@ -86,8 +91,13 @@ def select_regions(data, region_col, regions, combine_subregions):
         else:
             group_cols = [region_col] # Wide format table
 
+        for group_col in group_cols:
+            data[group_col] = data[group_col].fillna("n/a") # Fill NaNs so they aren't excluded in groupby and joins
         data = data.groupby(group_cols).aggregate(np.sum)
         data = data.reset_index()
+
+        for group_col in group_cols:
+            data[group_col] = data[group_col].replace(to_replace="n/a", value=np.nan) # Put the NaNs back in
 
         # Drop columns that would've been messed up by the aggregation
         cols_to_not_drop = group_cols + ["cases", "deaths", "recovered"]
@@ -96,17 +106,117 @@ def select_regions(data, region_col, regions, combine_subregions):
 
     return data
 
-def calc_x_day_avg(data, x=3):
+def calc_x_day_avg(data, x, keep_unaveraged):
     """Take a table of daily counts, and average the counts for each set of x consecutive days (e.g., a 3 day average).
 
     Parameters:
     data (pandas.DataFrame): The data to average.
-    x (int, optional): The number of days to put into each averaged group. Default 3.
+    x (int): The number of days to put into each averaged group.
+    keep_unaveraged (bool): Whether to keep the unaveraged values. Otherwise, the function just returns the averaged values.
 
     Returns:
     pandas.DataFrame: The table, averaged over the specified number of days.
     """
-    pass
+    wide = False
+    if "date" not in data.columns:
+        wide = True
+
+    # Search for defined location id cols (based on data source and region)
+    if {"Province/State", "Country/Region"}.issubset(data.columns): # JHU global table
+        id_cols = ["Province/State", "Country/Region"]
+    elif {"Combined_Key"}.issubset(data.columns): # JHU USA table
+        id_cols = ["Combined_Key"]
+    elif {"county", "state"}.issubset(data.columns): # NYT USA state and county table
+        id_cols = ["county", "state"]
+    elif {"state"}.issubset(data.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not the state/county table.
+        id_cols = ["state"]
+    else:
+        raise ParameterError("The dataframe you passed does not contain any of the standard location identification columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{data.columns}")
+
+    if wide:
+
+        # Make id cols the index
+        averages = data.set_index(id_cols)
+
+        # Drop cols besides date cols
+        cols_to_drop = [col for col in data.columns if not issubclass(type(col), datetime.date)]
+        averages = data.drop(columns=cols_to_drop)
+
+        # Stack the date cols into the index
+
+        # Get list of unique dates
+
+        # Generate a sequence assigning group numbers to each date, and make it a series
+
+        # Use drop_duplicates keep parameter to get last and first days for each group
+
+        # Join that series to the data, both indexed by date
+
+        # Group by first day and id cols, and aggregate
+
+        # Unstack the date level
+
+
+    else: # Long format table
+
+        # Extract date, data, and id cols
+        data_cols = ["cases", "deaths", "recovered"]
+        cols_to_keep = [col for col in data.columns if col == "date" or col in id_cols or col in data_cols]        
+        averages = data[cols_to_keep]
+        
+        # Get list of unique dates
+        dates = averages["date"].drop_duplicates(keep="first")
+
+        # Generate a sequence assigning group numbers to each date, and make it a dataframe
+        num_groups = len(dates) // x + 1
+        group_nums = np.repeat(range(0, num_groups), x)
+        group_nums = group_nums[0: len(dates)]
+        groups = pd.DataFrame({"group_num": group_nums}, index=dates)
+        
+        # Use drop_duplicates keep parameter to get last and first days for each group
+        first_days = groups["group_num"].drop_duplicates(keep="first")
+        last_days = groups["group_num"].drop_duplicates(keep="last")
+
+        # Swap the index and values for each of those two series, so we can join on the day numbers
+        first_days = pd.Series(first_days.index, index=first_days, name="group_first_day")
+        last_days = pd.Series(last_days.index, index=last_days, name="group_last_day")
+
+        # Join those series into the group nums dataframe, joining on group num
+        groups = groups.join(first_days, on="group_num")
+        groups = groups.join(last_days, on="group_num")
+
+        # Drop the group num column from the group dataframe
+        groups = groups.drop(columns="group_num")
+
+        # Join the group first and last days dataframe to the selected data and to the original dataframe, joining on date.
+        averages = averages.join(groups, on="date")
+        data = data.join(groups, on="date")
+
+        # Fill NaNs in the grouping columns, so they don't get messed up in groupby or join operations
+        for id_col in id_cols:
+            averages[id_col] = averages[id_col].fillna("n/a")
+            data[id_col] = data[id_col].fillna("n/a")
+
+        # Group by first day and id cols, and aggregate
+        group_cols = id_cols + ["group_first_day"]
+        averages = averages.groupby(group_cols).aggregate(np.mean)
+
+        # Rename the averaged columns
+        averages = averages.rename(columns=lambda name, x=x: f"{name}_avg{x}days")
+
+        # Join the averaged data into the original dataframe
+        data = data.join(averages, on=group_cols) # Join the averages into the original dataframe
+        
+        # Put the NaNs back in
+        for id_col in id_cols:
+            data[id_col] = data[id_col].replace(to_replace="n/a", value=np.nan)
+
+        if not keep_unaveraged:
+            cols_to_drop = ["date"] + data_cols
+            data = data.drop(columns=cols_to_drop)
+            data = data.drop_duplicates()
+
+    return data
 
 def calc_daily_change(data, data_type="all"):
     """Get the daily change in the number of cases/deaths/recoveries, instead of cumulative counts.
@@ -186,10 +296,13 @@ def calc_daily_change(data, data_type="all"):
             data = data.set_index(id_cols)
 
             # Fill NaNs in grouping cols (fillna excludes index)
-            data = data.fillna(0)
+            data = data.fillna("n/a")
 
             # Group by location and calculate daily counts with our helper function _offset_subtract
             data = data.groupby(suffix_group_cols).transform(_offset_subtract)
+
+            # Put back in any remaining NaNs
+            data = data.replace(to_replace="n/a", value=np.nan)
 
             # Take the other columns back out of the index
             data = data.reset_index()
@@ -243,10 +356,13 @@ def calc_days_since_min_count(data, data_type, min_count, group_by):
     data = data.set_index(id_cols)
 
     # Fill NaNs in grouping cols (fillna excludes index)
-    data = data.fillna(0)
+    data = data.fillna("n/a")
 
     # Separate the groups, and calculate the number of days since the specified count
     data = data.groupby(suffix_group_cols).transform(lambda col: pd.Series(data=range(0, len(col)), index=col.index))
+
+    # Put back in any remainings NaNs
+    data = data.replace(to_replace="n/a", value=np.nan)
 
     # Take the other columns back out of the index
     data = data.reset_index()
