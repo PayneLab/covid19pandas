@@ -14,6 +14,7 @@ For more help, see our tutorials at <https://github.com/PayneLab/covid19pandas/t
 """
 
 import pandas as pd
+import numpy as np
 import os
 import warnings
 import datetime
@@ -95,8 +96,17 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
         }
     }
 
+    if region == "global":
+        id_cols = ["Province/State", "Country/Region"]
+    else: # region == "us"
+        id_cols = ["Combined_Key"]
+
     if format == "wide":
         df = _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
+
+        # Drop identifier columns besides the one we'll use to join on with the location table.
+        date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
+        df = df[id_cols + date_cols]
 
     else: # format == "long":
         # Get the requested table types
@@ -108,29 +118,66 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
              dfs[data_type] = _get_table(base_url, file_names[region][data_type], source="jhu", update=update)
 
         # Gather the tables into long format (a la tidyr), and join into one table
+        date_and_id_cols = ["date"] + id_cols
         all_df = None
         for iter_data_type, df in dfs.items():
 
             df = _wide_to_long(df, iter_data_type)
-            id_cols = df.columns[df.columns != iter_data_type].tolist()
-            df = df.set_index(id_cols)
+            df = df[date_and_id_cols + [iter_data_type]] # Drop identifier columns besides the one we'll use to join on with the location table.
+
+            # Temporarily fill NaNs in the id cols with a string so they can be equal in join key comparisons
+            for id_col in id_cols:
+                df[id_col] = df[id_col].fillna("n/a")
 
             if all_df is None:
-                all_df = pd.DataFrame(columns=id_cols)
-                all_df = all_df.set_index(id_cols)
+                all_df = pd.DataFrame(columns=date_and_id_cols)
+                all_df = all_df.set_index(date_and_id_cols)
 
+            # Set the date and id cols as the index of df, then join on them to all_df
+            df = df.set_index(date_and_id_cols)
             all_df = all_df.join(df, how="outer")
-
-        if region == "global":
-            all_df = all_df.sort_index(level=["date", "Country/Region", "Province/State"])
-        elif region == "us":
-            all_df = all_df.sort_index(level=["date", "Country_Region", "Province_State", "Admin2"])
 
         all_df = all_df.fillna(0)
         all_df = all_df.astype('int64')
         all_df = all_df.reset_index()
-        all_df = all_df.drop_duplicates(keep="first") # Duplicate rows may have been created by the joins if there were NaNs in any of the id_cols
+
+        # Put the NaNs back into the id cols
+        for id_col in id_cols:
+            all_df[id_col] = all_df[id_col].replace(to_replace="n/a", value=np.nan)
+
         df = all_df
+
+    # Get the location data and join it in
+    loc_table_base_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/"
+    loc_table_name = "UID_ISO_FIPS_LookUp_Table.csv"
+    loc_table = _get_table(loc_table_base_url, loc_table_name, source="jhu", update=update)
+    if region == "global":
+        loc_table = loc_table.rename(columns={"Country_Region": "Country/Region", "Province_State": "Province/State"})
+        loc_table = loc_table[pd.isnull(loc_table["Admin2"])] # Drop location data for individual US counties--we only want state level data, to avoid duplicate rows
+
+    df = loc_table.merge(df, on=id_cols, how="right", suffixes=(False, False), validate="one_to_many")
+
+    # If it's the global table, drop the FIPS and Admin2 columns--they're only relevant for the US table
+    if region == "global":
+        df = df.drop(columns=["FIPS", "Admin2"])
+
+    # If long format, make the date columns the first column in the dataframe
+    if format == "long":
+        df_col_list = df.columns.tolist()
+        df_col_list.remove("date")
+        df = df[["date"] + df_col_list]
+
+    # Sort the table
+    if region == "global":
+        sort_cols = ["Country/Region", "Province/State"]
+    else: # region == "us"
+        sort_cols = ["Country_Region", "Province_State", "Admin2"]
+
+    if format == "long":
+        sort_cols = ["date"] + sort_cols
+
+    df = df.sort_values(by=sort_cols)
+    df = df.reset_index(drop=True) # So the range index is still in ascending order after sorting
 
     print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return df

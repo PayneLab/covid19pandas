@@ -11,6 +11,7 @@
 
 import covid19pandas as cod
 import covid19pandas.exceptions as codex
+from .test_getters import TestGetters
 
 import pandas as pd
 import numpy as np
@@ -61,9 +62,9 @@ class TestSelectors:
                                 compare_by_types.remove("recovered")
 
                             for compare_by_type in compare_by_types:
-                                self._check_select_top_x(df, compare_by_type)
+                                self._check_select_top_x(df, format, compare_by_type, other_to_keep=[col for col in compare_by_types if col != compare_by_type])
                         else:
-                            self._check_select_top_x(df, data_type)
+                            self._check_select_top_x(df, format, data_type)
 
     def test_select_top_x_nyt(self):
         for format in formats:
@@ -75,10 +76,12 @@ class TestSelectors:
                         df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
 
                         if data_type == "all":
-                            for compare_by_type in [type for type in nyt_data_types if type != "all"]:
-                                self._check_days_since(df, compare_by_type)
+                            compare_by_types = set(nyt_data_types)
+                            compare_by_types.remove("all")
+                            for compare_by_type in compare_by_types:
+                                self._check_select_top_x(df, format, compare_by_type, other_to_keep=[col for col in compare_by_types if col != compare_by_type])
                         else:
-                            self._check_select_top_x(df, data_type)
+                            self._check_select_top_x(df, format, data_type)
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for select_regions
@@ -91,7 +94,12 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
-                        self._check_select_regions(df)
+
+                        if data_type == "all":
+                            cols_to_keep = ["cases", "deaths", "recovered"]
+                        else:
+                            cols_to_keep = [data_type]
+                        self._check_select_regions(df, format, cols_kept=cols_to_keep)
 
     def test_select_regions_nyt(self):
         for format in formats:
@@ -101,12 +109,17 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
-                        self._check_select_regions(df)
+
+                        if data_type == "all":
+                            cols_to_keep = ["cases", "deaths"]
+                        else:
+                            cols_to_keep = [data_type]
+                        self._check_select_regions(df, format, cols_kept=cols_to_keep)
 
     # -------------------------------------------------------------------------------------------------------------
-    # Tests for calc_x_day_avg
+    # Tests for calc_x_day_mean
     # -------------------------------------------------------------------------------------------------------------
-    def test_calc_x_day_avg_jhu(self):
+    def test_calc_x_day_mean_jhu(self):
         for format in formats:
             for data_type in jhu_data_types:
                 for region in jhu_regions:
@@ -114,9 +127,9 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
-                        self._check_calc_x_day_avg(df, data_type)
+                        self._check_calc_x_day_mean(df, format)
 
-    def test_calc_x_day_avg_nyt(self):
+    def test_calc_x_day_mean_nyt(self):
         for format in formats:
             for data_type in nyt_data_types:
                 for county_option in nyt_county_options:
@@ -124,7 +137,7 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
-                        self._check_calc_x_day_avg(df, data_type)
+                        self._check_calc_x_day_mean(df, format)
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_daily_change
@@ -136,7 +149,7 @@ class TestSelectors:
                     pass # Invalid table parameter combination
                 else:
                     df = cod.get_data_jhu(format="long", data_type=data_type, region=region, update=False)
-                    self._check_daily_change(df, data_type, format="long")
+                    self._check_daily_change(df, format="long", data_type=data_type)
 
     def test_calc_daily_change_jhu_wide(self):
         for data_type in jhu_data_types:
@@ -145,13 +158,13 @@ class TestSelectors:
                     pass # Invalid table parameter combination
                 else:
                     df = cod.get_data_jhu(format="wide", data_type=data_type, region=region, update=False)
-                    self._check_daily_change(df, data_type, format="wide")
+                    self._check_daily_change(df, format="wide", data_type=data_type)
 
     def test_calc_daily_change_nyt_long(self):
         for data_type in nyt_data_types:
             for county_option in nyt_county_options:
                 df = cod.get_data_nyt(format="long", data_type=data_type, counties=county_option, update=False)
-                self._check_daily_change(df, data_type, format="long")
+                self._check_daily_change(df, format="long", data_type=data_type)
 
     def test_calc_daily_change_nyt_wide(self):
         for data_type in nyt_data_types:
@@ -160,7 +173,7 @@ class TestSelectors:
                     pass # Invalid table parameter combination
                 else:
                     df = cod.get_data_nyt(format="wide", data_type=data_type, counties=county_option, update=False)
-                    self._check_daily_change(df, data_type, format="wide")
+                    self._check_daily_change(df, format="wide", data_type=data_type)
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_days_since_min_count
     # -------------------------------------------------------------------------------------------------------------
@@ -180,9 +193,9 @@ class TestSelectors:
                                 count_by_types.remove("recovered")
 
                             for count_by_type in count_by_types:
-                                self._check_days_since(df, count_by_type)
+                                self._check_days_since(df, format, count_by_type)
                         else:
-                            self._check_days_since(df, data_type)
+                            self._check_days_since(df, format, data_type)
 
     def test_calc_days_since_min_count_nyt(self):
         for format in formats:
@@ -194,14 +207,15 @@ class TestSelectors:
                         df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
                         if data_type == "all":
                             for count_by_type in [type for type in nyt_data_types if type != "all"]:
-                                self._check_days_since(df, count_by_type)
+                                self._check_days_since(df, format, count_by_type)
                         else:
-                            self._check_days_since(df, data_type)
+                            self._check_days_since(df, format, data_type)
 
     # -------------------------------------------------------------------------------------------------------------
     # Helper methods
     # -------------------------------------------------------------------------------------------------------------
-    def _check_select_top_x(self, df, data_type):
+    @staticmethod
+    def _check_select_top_x(df, format, data_type, other_to_keep=[]):
 
         # Search for defined region cols (based on data source)
         if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
@@ -209,7 +223,7 @@ class TestSelectors:
             exclude = ["US", "China"]
         elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
             region_col = "Province_State"
-            exclude = ["Washington", "Illinois"]
+            exclude = ["New York", "Illinois"]
         elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table.
             region_col = "state"
             exclude = ["Washington", "Illinois"]
@@ -217,16 +231,29 @@ class TestSelectors:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
         # Call the function
-        top = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True)        
-        top_uncombined = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=False)        
-        top_with_exclusions = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, exclude=exclude)        
+        top = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep)
+        top_others_kept = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep)
+        top_uncombined = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=False, other_data_cols_to_keep=other_to_keep)        
+        top_with_exclusions = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep, exclude=exclude)        
+
+        # Run basic table checks
+        TestGetters._test_gotten(top, format)
+        TestGetters._test_gotten(top_others_kept, format)
+        TestGetters._test_gotten(top_uncombined, format)
+        TestGetters._test_gotten(top_with_exclusions, format)
+
+        # Check that combining the region and date cols creates a unique index for every row (or just region col if wide)
+        # If we had other cols to keep, make sure they were kept, and are equal to their original values.
+        # Check that the excluded countries aren't in the list
+        # Check that length of combined table is x * len(unique(dates))
 
         # Just print the output for now. We'll add more intense tests later.
         print(top)
         print(top_uncombined)
         print(top_with_exclusions)
 
-    def _check_select_regions(self, df):
+    @staticmethod
+    def _check_select_regions(df, format, cols_kept):
 
         # Search for defined region cols (based on data source)
         if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
@@ -245,34 +272,54 @@ class TestSelectors:
         selected = cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=True)
         selected_uncombined = cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=False)
 
+        # Run basic table checks
+        TestGetters._test_gotten(selected, format)
+        TestGetters._test_gotten(selected_uncombined, format)
+
+        # Make sure that only the regions we specified exist in the region col
+        # Make sure cols_kept were kept
+
         # Just print the output for now. We'll add more intense tests later.
         print(selected)
         print(selected_uncombined)
 
-    def _check_calc_x_day_avg(self, df):
-        pass
+    @staticmethod
+    def _check_calc_x_day_mean(df, format, data_types, all_input_data_types=[]):
 
-    def _check_daily_change(self, df, data_type, format):
+        just_meaned = cod.calc_x_day_mean(df, 3, keep_originals=False, data_types=data_types)
+        originals_and_meaned = cod.calc_x_day_mean(df, 3, keep_originals=True, data_types=data_types)
+
+        # Run basic table checks
+        TestGetters._test_gotten(just_meaned, format)
+        TestGetters._test_gotten(originals_and_meaned, format)
+
+        # For all in all_input_data_types that aren't in data_types, make sure not in table
+        # Check that number of unique in mean_group_start and end are len(unique(dates)) // x
+
+        print(just_meaned)
+        print(original_and_meaned)
+
+    @staticmethod
+    def _check_daily_change(df, format, data_type):
         """Verifies that when df is passed to calc_daily_change, the daily count columns generated are correct.
 
         df (pandas.DataFrame): A dataframe from the package.
-        data_type (str): The data type the table is for. Either "cases", "deaths", "recovered", or "all".
         format (str): The format of the table. Either "wide" or "long".
+        data_type (str): The data type the table is for. Either "cases", "deaths", "recovered", or "all".
 
         Returns:
         None
         """
+
         # Search for defined grouping cols (based on data source and region)
-        if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
-            group_cols = ["Province/State", "Country/Region"]
-        elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+        if {"Combined_Key"}.issubset(df.columns): # JHU table
             group_cols = ["Combined_Key"]
         elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
             group_cols = ["county", "state"]
         elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
             group_cols = ["state"]
         else:
-            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
         if data_type == "all":
 
@@ -288,6 +335,10 @@ class TestSelectors:
         if format == "long":
             daily = cod.calc_daily_change(df, data_type)
             both = cod.calc_daily_change(df, data_type, keep_cumulative=True)
+
+            # Run basic table checks
+            TestGetters._test_gotten(daily, format)
+            TestGetters._test_gotten(both, format)
 
             for iter_data_type in data_types:
                 if len(group_cols) == 1:
@@ -317,8 +368,11 @@ class TestSelectors:
 
         elif format == "wide":
             daily = cod.calc_daily_change(df, data_type)
-            date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
 
+            # Run basic table checks
+            TestGetters._test_gotten(daily, format)
+
+            date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
             id_cols = [col for col in df.columns if not issubclass(type(col), datetime.date)]
             df = df.sort_values(by=id_cols)
             daily = daily.sort_values(by=id_cols)
@@ -331,10 +385,12 @@ class TestSelectors:
         else:
             raise Exception(f"Invalid format '{format}'")
 
-    def _check_days_since(self, df, data_type):
+    @staticmethod
+    def _check_days_since(df, format, data_type):
         """Verifies that when df is passed to calc_days_since_min_count, the functions works.
 
         df (pandas.DataFrame): A dataframe from the package.
+        format (str): The format of the table. Either "wide" or "long".
         data_type (str): The data type the table is for. Either "cases", "deaths", "recovered", or "all".
 
         Returns:
@@ -342,19 +398,21 @@ class TestSelectors:
         """
 
         # Search for defined grouping cols (based on data source and region)
-        if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
-            group_cols = ["Province/State", "Country/Region"]
-        elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+        if {"Combined_Key"}.issubset(df.columns): # JHU table
             group_cols = ["Combined_Key"]
         elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
             group_cols = ["county", "state"]
         elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
             group_cols = ["state"]
         else:
-            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
         # Call the function
         ct = cod.calc_days_since_min_count(df, data_type, min_count=100, group_by=group_cols)
 
-        # Just print the output for now. We'll add more intense tests later.
+        # Run basic table checks
+        TestGetters._test_gotten(ct, format)
+
+        # Check that all values in data type col are >= min count
+
         print(ct)
