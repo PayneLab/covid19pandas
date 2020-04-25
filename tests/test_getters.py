@@ -88,25 +88,27 @@ class TestGetters:
 
     # Help functions
     @staticmethod
-    def _check_gotten(df, format):
+    def _check_gotten(df, format, group_cols=None):
         """Standard checks to verify integrity of gotten table."""
 
         # Check dimensions
         assert df.shape[0] > 0 and df.shape[1] > 0
 
-        # Search for defined id cols (based on data source and region)
-        if {"Combined_Key"}.issubset(df.columns): # JHU table
-            group_cols = ["Combined_Key"]
-        elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
-            group_cols = ["county", "state"]
-        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
-            group_cols = ["state"]
-        else:
-            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+        if group_cols is None:
+            # Search for defined id cols (based on data source and region)
+            if {"Combined_Key"}.issubset(df.columns): # JHU table
+                group_cols = ["Combined_Key"]
+            elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
+                group_cols = ["county", "state"]
+            elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
+                group_cols = ["state"]
+            else:
+                raise Exception("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
+            if format == "long":
+                group_cols = ["date"] + group_cols
 
         # Check that there aren't duplicates
-        if format == "long":
-            group_cols = ["date"] + group_cols
         assert not df.duplicated(subset=group_cols).any()
 
         # Check for proper date types

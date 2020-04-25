@@ -11,7 +11,7 @@
 
 import covid19pandas as cod
 import covid19pandas.exceptions as codex
-from .test_getters import TestGetters
+from test_getters import TestGetters
 
 import pandas as pd
 import numpy as np
@@ -204,8 +204,6 @@ class TestSelectors:
                     if (format == "wide" and data_type == "all"):
                         pass # Invalid table parameter combination
                     else:
-                        df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
-                        if data_type == "all":
                             for count_by_type in [type for type in nyt_data_types if type != "all"]:
                                 self._check_days_since(df, format, count_by_type)
                         else:
@@ -230,21 +228,40 @@ class TestSelectors:
         else:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
+        if format == "wide":
+            group_cols = [region_col]
+        else: # format == "long"
+            group_cols = ["date", region_col]
+
+        # If it's the NYT county table, we need to add that as a group col
+        if {"county"}.issubset(df.columns):
+            group_cols = group_cols + ["county"]
+
         # Call the function
-        top = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep)
-        top_others_kept = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep)
-        top_uncombined = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=False, other_data_cols_to_keep=other_to_keep)        
-        top_with_exclusions = cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep, exclude=exclude)        
+        outs = {
+            "top": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep),
+            "top_others_kept": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep),
+            "top_uncombined": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=False, other_data_cols_to_keep=other_to_keep),
+            "top_with_exclusions": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=10, combine_subregions=True, other_data_cols_to_keep=other_to_keep, exclude=exclude),
+        }
 
         # Run basic table checks
-        TestGetters._test_gotten(top, format)
-        TestGetters._test_gotten(top_others_kept, format)
-        TestGetters._test_gotten(top_uncombined, format)
-        TestGetters._test_gotten(top_with_exclusions, format)
+        for out in outs.values():
+            TestGetters._check_gotten(out, format, group_cols=group_cols)
 
         # Check that combining the region and date cols creates a unique index for every row (or just region col if wide)
+        for out in outs.values():
+            assert not out.duplicated(subset=group_cols).any()
+
         # If we had other cols to keep, make sure they were kept, and are equal to their original values.
+        for keep in other_to_keep:
+            for out in outs.values():
+                assert keep in out.columns
+                assert out[keep].equals(df[keep])
+
         # Check that the excluded countries aren't in the list
+        assert not outs["top_with_exclusions"][region_col].isin(exclude).any()
+
         # Check that length of combined table is x * len(unique(dates))
 
         # Just print the output for now. We'll add more intense tests later.
@@ -273,8 +290,8 @@ class TestSelectors:
         selected_uncombined = cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=False)
 
         # Run basic table checks
-        TestGetters._test_gotten(selected, format)
-        TestGetters._test_gotten(selected_uncombined, format)
+        TestGetters._check_gotten(selected, format)
+        TestGetters._check_gotten(selected_uncombined, format)
 
         # Make sure that only the regions we specified exist in the region col
         # Make sure cols_kept were kept
@@ -290,8 +307,8 @@ class TestSelectors:
         originals_and_meaned = cod.calc_x_day_mean(df, 3, keep_originals=True, data_types=data_types)
 
         # Run basic table checks
-        TestGetters._test_gotten(just_meaned, format)
-        TestGetters._test_gotten(originals_and_meaned, format)
+        TestGetters._check_gotten(just_meaned, format)
+        TestGetters._check_gotten(originals_and_meaned, format)
 
         # For all in all_input_data_types that aren't in data_types, make sure not in table
         # Check that number of unique in mean_group_start and end are len(unique(dates)) // x
@@ -337,8 +354,8 @@ class TestSelectors:
             both = cod.calc_daily_change(df, data_type, keep_cumulative=True)
 
             # Run basic table checks
-            TestGetters._test_gotten(daily, format)
-            TestGetters._test_gotten(both, format)
+            TestGetters._check_gotten(daily, format)
+            TestGetters._check_gotten(both, format)
 
             for iter_data_type in data_types:
                 if len(group_cols) == 1:
@@ -370,7 +387,7 @@ class TestSelectors:
             daily = cod.calc_daily_change(df, data_type)
 
             # Run basic table checks
-            TestGetters._test_gotten(daily, format)
+            TestGetters._check_gotten(daily, format)
 
             date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
             id_cols = [col for col in df.columns if not issubclass(type(col), datetime.date)]
@@ -411,7 +428,7 @@ class TestSelectors:
         ct = cod.calc_days_since_min_count(df, data_type, min_count=100, group_by=group_cols)
 
         # Run basic table checks
-        TestGetters._test_gotten(ct, format)
+        TestGetters._check_gotten(ct, format)
 
         # Check that all values in data type col are >= min count
 
