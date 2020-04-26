@@ -75,15 +75,15 @@ def select_top_x_regions(data, region_col, data_type, x, combine_subregions, oth
 
     return top_x_cts
 
-def select_regions(data, region_col, regions, combine_subregions, data_cols_to_keep):
+def select_regions(data, region_col, regions, combine_subregions, data_cols_to_keep=[]):
     """Select all data for particular regions within a table, optionally summing counts for subregions into one count for each region for each day.
     
     Parameters:
     data (pandas.DataFrame): The dataframe from which to select data.
     region_col (str): The name of the column that contains the region designation you're specifying by. E.g., if you want to select particular states, pass the name of the state column
     regions (str or list of str): The regions to select.
-    combine_subregions (bool, optional): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Default True. Otherwise, keeps the regions broken into subregions. 
-    data_cols_to_keep (str or list of str): The data column(s) in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. We drop other columns by default, because numerical columns like Latitude and Longitude or FIPS would be messed up by the aggregation. This parameter has no effect if combine_subregions is False.
+    combine_subregions (bool): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Default True. Otherwise, keeps the regions broken into subregions. 
+    data_cols_to_keep (str or list of str, optional): Only required for long format tables. This is the data column(s) in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. We drop other columns by default, because numerical columns like Latitude and Longitude or FIPS would be messed up by the aggregation. This parameter has no effect if combine_subregions is False or you pass a wide format table; default is an empty list.
 
     Returns:
     pandas.DataFrame: The data for the specified regions.
@@ -101,13 +101,14 @@ def select_regions(data, region_col, regions, combine_subregions, data_cols_to_k
     if combine_subregions:
         if "date" in data.columns: # Long format table
             group_cols = ["date", region_col]
+
+            # Make sure that the data_cols_to_keep columns all exist
+            not_in = [col for col in data_cols_to_keep if not col in data.columns]
+            if len(not_in) > 0:
+                raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_cols_to_keep parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
+
         else:
             group_cols = [region_col] # Wide format table
-
-        # Make sure that the data_cols_to_keep columns all exist
-        not_in = [col for col in data_cols_to_keep if not col in data.columns]
-        if len(not_in) > 0:
-            raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_cols_to_keep parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
 
         # Drop columns that would be messed up by the groupby
         cols_to_not_drop = group_cols + data_cols_to_keep
