@@ -11,12 +11,13 @@
 
 import covid19pandas as cod
 import covid19pandas.exceptions as codex
-from test_getters import TestGetters
+from test_getters import _check_gotten
 
 import pandas as pd
 import numpy as np
 import datetime
 import pytest
+import math
 
 formats = ["wide", "long"]
 jhu_data_types = ["all", "cases", "deaths", "recovered"]
@@ -36,12 +37,6 @@ class TestSelectors:
 
         cod.get_data_nyt(data_type="all", counties=False, update=True)
         cod.get_data_nyt(data_type="all", counties=True, update=True)
-
-        # Set pandas display options for when we print tables
-        pd.options.display.max_rows = 60
-        pd.options.display.max_columns = 10
-        pd.options.display.width = None
-        pd.options.display.min_rows = None
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for select_top_x_regions
@@ -130,7 +125,17 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
-                        self._check_calc_x_day_mean(df, format)
+
+                        if data_type == "all":
+                            input_data_types = set(jhu_data_types)
+                            input_data_types.remove("all")
+                            if region == "us":
+                                input_data_types.remove("recovered")
+
+                            for input_data_type in input_data_types:
+                                self._check_calc_x_day_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
+                        else:
+                            self._check_calc_x_day_mean(df, format, data_type)
 
     def test_calc_x_day_mean_nyt(self):
         for format in formats:
@@ -140,43 +145,39 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
-                        self._check_calc_x_day_mean(df, format)
+
+                        if data_type == "all":
+                            input_data_types = set(nyt_data_types)
+                            input_data_types.remove("all")
+
+                            for input_data_type in input_data_types:
+                                self._check_calc_x_day_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
+                        else:
+                            self._check_calc_x_day_mean(df, format, data_type)
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_daily_change
     # -------------------------------------------------------------------------------------------------------------
-    def test_calc_daily_change_jhu_long(self):
-        for data_type in jhu_data_types:
-            for region in jhu_regions:
-                if region == "us" and data_type == "recovered":
-                    pass # Invalid table parameter combination
-                else:
-                    df = cod.get_data_jhu(format="long", data_type=data_type, region=region, update=False)
-                    self._check_daily_change(df, format="long", data_type=data_type)
+    def test_calc_daily_change_jhu(self):
+        for format in formats:
+            for data_type in jhu_data_types:
+                for region in jhu_regions:
+                    if (region == "us" and data_type == "recovered") or (format == "wide" and data_type == "all"):
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
+                        self._check_daily_change(df, format=format, data_type=data_type)
 
-    def test_calc_daily_change_jhu_wide(self):
-        for data_type in jhu_data_types:
-            for region in jhu_regions:
-                if (region == "us" and data_type == "recovered") or data_type == "all":
-                    pass # Invalid table parameter combination
-                else:
-                    df = cod.get_data_jhu(format="wide", data_type=data_type, region=region, update=False)
-                    self._check_daily_change(df, format="wide", data_type=data_type)
+    def test_calc_daily_change_long_nyt(self):
+        for format in formats:
+            for data_type in nyt_data_types:
+                for county_option in nyt_county_options:
+                    if format == "wide" and data_type == "all":
+                        pass # Invalid table parameter combination
+                    else:
+                        df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
+                        self._check_daily_change(df, format=format, data_type=data_type)
 
-    def test_calc_daily_change_nyt_long(self):
-        for data_type in nyt_data_types:
-            for county_option in nyt_county_options:
-                df = cod.get_data_nyt(format="long", data_type=data_type, counties=county_option, update=False)
-                self._check_daily_change(df, format="long", data_type=data_type)
-
-    def test_calc_daily_change_nyt_wide(self):
-        for data_type in nyt_data_types:
-            for county_option in nyt_county_options:
-                if data_type == "all":
-                    pass # Invalid table parameter combination
-                else:
-                    df = cod.get_data_nyt(format="wide", data_type=data_type, counties=county_option, update=False)
-                    self._check_daily_change(df, format="wide", data_type=data_type)
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_days_since_min_count
     # -------------------------------------------------------------------------------------------------------------
@@ -251,13 +252,13 @@ class TestSelectors:
         for name, out in outs.items():
 
             if name == "top_uncombined" and {"Admin2"}.issubset(df.columns):
-                TestGetters._check_gotten(out, format, group_cols=group_cols + ["Admin2"]) # If it's the JHU U.S. table, we need to add "Admin2" as a group col, but only for the uncombined table.
+                _check_gotten(out, format, group_cols=group_cols + ["Admin2"]) # If it's the JHU U.S. table, we need to add "Admin2" as a group col, but only for the uncombined table.
             elif name == "top_uncombined" and {"Province/State"}.issubset(df.columns):
-                TestGetters._check_gotten(out, format, group_cols=group_cols + ["Province/State"]) # If it's the JHU global table, we need to add "Province/State" as a group col, but only for the uncombined table.
+                _check_gotten(out, format, group_cols=group_cols + ["Province/State"]) # If it's the JHU global table, we need to add "Province/State" as a group col, but only for the uncombined table.
             elif name == "top_uncombined" and {"county"}.issubset(df.columns):
-                TestGetters._check_gotten(out, format, group_cols=group_cols + ["county"]) # If it's the NYT county table, we need to add "county" as a group col, but only for the uncombined table.
+                _check_gotten(out, format, group_cols=group_cols + ["county"]) # If it's the NYT county table, we need to add "county" as a group col, but only for the uncombined table.
             else:
-                TestGetters._check_gotten(out, format, group_cols=group_cols)
+                _check_gotten(out, format, group_cols=group_cols)
 
         # Make sure that the data values weren't changed, if we didn't aggregate
         if format == "wide":
@@ -302,10 +303,6 @@ class TestSelectors:
                     assert out.shape[0] <= num_top * out["date"].unique().size # We check <= because some of the regions may not have counts for all days at the beginning
                     assert num_top == out[region_col].unique().size
 
-        # Just print the output for now. We'll add more intense tests later.
-        for out in outs.values():
-            print(out)
-
     @staticmethod
     def _check_select_regions(df, format, cols_kept):
 
@@ -332,11 +329,11 @@ class TestSelectors:
         for name, out in dfs.items():
             if name == "selected":
                 if format == "long":
-                    TestGetters._check_gotten(out, format, group_cols=["date", region_col])
+                    _check_gotten(out, format, group_cols=["date", region_col])
                 else: 
-                    TestGetters._check_gotten(out, format, group_cols=[region_col])
+                    _check_gotten(out, format, group_cols=[region_col])
             else: # name == "selected_uncombined"
-                TestGetters._check_gotten(out, format)
+                _check_gotten(out, format)
 
         # Make sure that only the regions we specified exist in the region col
         for out in dfs.values():
@@ -359,27 +356,63 @@ class TestSelectors:
                         if name == "selected_uncombined":
                             assert out[col].equals(df.loc[df[region_col].isin(regions), col])
 
-        # Just print the output for now. We'll add more intense tests later.
-        for out in dfs.values():
-            print(out)
-
     @staticmethod
-    def _check_calc_x_day_mean(df, format, data_types, all_input_data_types=[]):
+    def _check_calc_x_day_mean(df, format, data_type, other_input_data_types=[]):
 
-        dfs = {
-            "just_meaned": cod.calc_x_day_mean(df, 3, keep_originals=False, data_types=data_types),
-            "originals_and_meaned": cod.calc_x_day_mean(df, 3, keep_originals=True, data_types=data_types),
-        }
+        mean_range = 3
+        if format == "long":
+            dfs = {
+                "just_meaned": cod.calc_x_day_mean(df, data_types=data_type, x=mean_range, keep_originals=False),
+                "originals_and_meaned": cod.calc_x_day_mean(df, data_types=data_type, x=mean_range, keep_originals=True),
+            }
+        else: # format == "wide"
+            dfs = {
+                "just_meaned": cod.calc_x_day_mean(df, data_types=data_type, x=mean_range, keep_originals=False),
+            }
 
         # Run basic table checks
+        for name, out in dfs.items():
+            if name == "just_meaned" and format == "long":
+                # Search for defined id cols (based on data source and region)
+                if {"Combined_Key"}.issubset(df.columns): # JHU table
+                    group_cols = ["Combined_Key"]
+                elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
+                    group_cols = ["county", "state"]
+                elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
+                    group_cols = ["state"]
+                else:
+                    raise Exception("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
+                group_cols = ["mean_group_start"] + group_cols 
+                assert not out.duplicated(subset=group_cols).any()
+            else:
+                _check_gotten(out, format)
+
+        # Check that data_type got averaged
         for out in dfs.values():
-            TestGetters._check_gotten(out, format)
+            if format == "long":
+                assert f"{data_type}_mean{mean_range}days" in out.columns
+            else: # format == "wide"
+                assert not df.equals(out)
 
-        # For all in all_input_data_types that aren't in data_types, make sure not in table
+        # If not keep originals, make sure originals were dropped
+        if format == "long":
+            assert data_type not in dfs["just_meaned"].columns
+
+        # Make sure other_input_data_types aren't in table if not keep originals
+        if format == "long":
+            for other_input in other_input_data_types:
+                assert other_input not in dfs["just_meaned"].columns
+
         # Check that number of unique in mean_group_start and end are len(unique(dates)) // x
-
-        print(just_meaned)
-        print(original_and_meaned)
+        for out in dfs.values():
+            if format == "long":
+                assert out["mean_group_start"].unique().size == math.ceil(df["date"].unique().size / mean_range)
+                assert out["mean_group_end"].unique().size == math.ceil(df["date"].unique().size / mean_range)
+            else: # format == "wide"
+                num_out_dates = out.columns.map(lambda col: issubclass(type(col), datetime.date)).to_series().astype(bool).sum()
+                exp_num_out_dates = math.ceil(df.columns.map(lambda col: issubclass(type(col), datetime.date)).to_series().astype(bool).sum() / mean_range)
+                assert num_out_dates == exp_num_out_dates
 
     @staticmethod
     def _check_daily_change(df, format, data_type):
@@ -403,47 +436,59 @@ class TestSelectors:
         else:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
-        if data_type == "all":
-
-            data_types = ["cases", "deaths"]
-            if "recovered" in df.columns:
-                data_types.append("recovered")
-
-        elif data_type in ["cases", "deaths", "recovered"]:
-            data_types = [data_type]
-        else:
-            raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', or 'recovered'.")
-
         if format == "long":
-            daily = cod.calc_daily_change(df, data_type)
-            both = cod.calc_daily_change(df, data_type, keep_cumulative=True)
+            if data_type == "all":
+
+                data_types = ["cases", "deaths"]
+                if "recovered" in df.columns:
+                    data_types.append("recovered")
+
+            elif data_type in ["cases", "deaths", "recovered"]:
+                data_types = [data_type]
+            else:
+                raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', or 'recovered'.")
+
+            daily = cod.calc_daily_change(df, data_types)
 
             # Run basic table checks
-            TestGetters._check_gotten(daily, format)
-            TestGetters._check_gotten(both, format)
+            _check_gotten(daily, format)
 
+            # Check that no columns were lost
+            assert df.columns.isin(daily.columns).all()
+
+            # Check daily change calculations against original cumulative columns
             for iter_data_type in data_types:
                 if len(group_cols) == 1:
                     group_col = group_cols[0]
-                    for group in df[group_col].drop_duplicates():
-                        group_df = df[df[group_col] == group]
-                        group_daily = daily[daily[group_col] == group]
-                        group_both = both[both[group_col] == group]
 
-                        assert group_daily["daily_" + iter_data_type].equals(pd.Series(group_df[iter_data_type] - np.insert(group_df[iter_data_type].values[:-1], 0, 0)))
+                    for group in df[group_col].drop_duplicates():
+                        row_filter = df[group_col] == group
+                        group_df = df[row_filter]
+                        group_daily = daily[row_filter]
+
+                        assert group_daily["daily_" + iter_data_type].equals(pd.Series(group_daily[iter_data_type] - np.insert(group_daily[iter_data_type].values[:-1], 0, 0))) # Check the daily calculation against the cumulative col in the same df
+                        assert group_daily[iter_data_type].equals(group_df[iter_data_type]) # Check the cumulative col against the one in the original df
 
                 elif len(group_cols) == 2:
                     group_col1 = group_cols[0]
                     group_col2 = group_cols[1]
-                    for group1 in df[group_col1].drop_duplicates():
-                        for group2 in df[group_col2].drop_duplicates():
-                            group_df = df[(df[group_col1] == group1) & (df[group_col2] == group2)]
-                            group_daily = daily[(daily[group_col1] == group1) & (daily[group_col2] == group2)]
-                            group_both = both[(both[group_col1] == group1) & (both[group_col2] == group2)]
 
-                            assert group_daily["daily_" + iter_data_type].equals(pd.Series(group_df[iter_data_type] - np.insert(group_df[iter_data_type].values[:-1], 0, 0))) # Check the daily calculation against the cumulative col in the original df
-                            assert group_both["daily_" + iter_data_type].equals(pd.Series(group_both[iter_data_type] - np.insert(group_both[iter_data_type].values[:-1], 0, 0))) # Check the daily calculation against the cumulative col in the same df
-                            assert group_both["daily_" + iter_data_type].equals(pd.Series(group_df[iter_data_type] - np.insert(group_df[iter_data_type].values[:-1], 0, 0))) # Check the daily calculation against the cumulative col in the original df
+                    existing_groups = df[group_cols].drop_duplicates(keep="first")
+                    for i in range(0, existing_groups.index.size):
+
+                        group1 = existing_groups.iloc[i, 0]
+                        group2 = existing_groups.iloc[i, 1]
+
+                        df_filter = (df[group_col1] == group1) & (df[group_col2] == group2)
+
+                        if df_filter.any():
+                            group_df = df[df_filter]
+                            group_daily = daily[df_filter]
+
+                            assert group_daily["daily_" + iter_data_type].equals(pd.Series(group_daily[iter_data_type] - np.insert(group_daily[iter_data_type].values[:-1], 0, 0))) # Check the daily calculation against the cumulative col in the same df
+                            assert group_daily[iter_data_type].equals(group_df[iter_data_type]) # Check the cumulative col against the one in the original df
+                        else:
+                            raise Exception("That was unexpected.")
 
                 else:
                     raise Exception(f"Unexpected length of group_cols: '{len(group_cols)}'. group_cols:\n{group_cols}")
@@ -452,13 +497,14 @@ class TestSelectors:
             daily = cod.calc_daily_change(df, data_type)
 
             # Run basic table checks
-            TestGetters._check_gotten(daily, format)
+            _check_gotten(daily, format)
 
             date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
-            id_cols = [col for col in df.columns if not issubclass(type(col), datetime.date)]
-            df = df.sort_values(by=id_cols)
-            daily = daily.sort_values(by=id_cols)
 
+            # The first day should be the same in both the daily and original dfs, since all cases/deaths/recovered were "new"
+            assert np.equal(df[date_cols[0]], daily[date_cols[0]]).all()
+
+            # Check that each daily change equals that day's columns minus the previous day's column, element-wise, in the original df
             for i in range(1, len(date_cols)):
                 day = date_cols[i]
                 prev_day = date_cols[i - 1]
@@ -490,11 +536,19 @@ class TestSelectors:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
         # Call the function
-        ct = cod.calc_days_since_min_count(df, data_type, min_count=100, group_by=group_cols)
+        min_count = 100
+        ct = cod.calc_days_since_min_count(df, data_type, min_count=min_count, group_by=group_cols)
 
         # Run basic table checks
-        TestGetters._check_gotten(ct, format)
+        _check_gotten(ct, format="long") # The calc_days_since_min_count function only outputs table in long format, even if given wide format as input
 
         # Check that all values in data type col are >= min count
+        assert (ct[data_type] >= min_count).all()
 
-        print(ct)
+        # Check that all values in days_since_{min_count}_{data_type} are <= number of days in original df
+        if format == "long":
+            num_days = df["date"].unique().size
+        else: # format == "wide"
+            num_days = df.columns.map(lambda col: issubclass(type(col), datetime.date)).to_series().astype(bool).sum()
+
+        assert (ct[f"days_since_{min_count}_{data_type}"] <= num_days).all()

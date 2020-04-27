@@ -18,7 +18,10 @@ import numpy as np
 import os
 import warnings
 import datetime
-from .exceptions import *
+
+from .exceptions import ParameterError
+from .getters import get_jhu_location_data
+from .utils import _long_to_wide, _wide_to_long, _offset_subtract
 
 def select_top_x_regions(data, region_col, data_type, x, combine_subregions, other_data_cols_to_keep, exclude=[]):
     """Select the top x regions with the most cases, deaths, recoveries, or count of another data type.
@@ -127,14 +130,15 @@ def select_regions(data, region_col, regions, combine_subregions, data_cols_to_k
 
     return data
 
-def calc_x_day_mean(data, x, keep_originals, data_types):
+def calc_x_day_mean(data, data_types, x, keep_originals):
     """Take a table of daily counts, and calculate the mean of the counts for each set of x consecutive days (e.g., a 3 day mean).
 
     Parameters:
     data (pandas.DataFrame): The data to calculate the means of.
+    data_types (str or list of str): The data columns in your table that you want to calculate the x day group means for.
     x (int): The number of days to calculate the means over.
     keep_originals (bool): Whether to keep the original values. Otherwise, the function just returns the means.
-    data_types (list of str): A list of the data columns in your table that you want to calculate the x day group means for.
+
     Returns:
     pandas.DataFrame: The table, with means calculated over the specified number of days.
     """
@@ -145,9 +149,15 @@ def calc_x_day_mean(data, x, keep_originals, data_types):
     if wide and keep_originals:
         raise ParameterError("You appear to have passed a wide format table, as there is no column of dates in the table. It is not possible to keep the original counts for a wide format table. Either pass a long format table, or pass keep_originals=False.")
 
+    # Convert from str to list input if needed
+    if isinstance(data_types, str):
+        data_types = [data_types]
+
     # Search for defined location id cols (based on data source and region)
+    jhu = False # For optional step later to drop non-averaged numbers
     if {"Combined_Key"}.issubset(data.columns): # JHU table
         id_cols = ["Combined_Key"]
+        jhu = True
     elif {"county", "state"}.issubset(data.columns): # NYT USA state and county table
         id_cols = ["county", "state"]
     elif {"state"}.issubset(data.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not the state/county table.
@@ -191,6 +201,7 @@ def calc_x_day_mean(data, x, keep_originals, data_types):
 
     # Drop the group num column from the group dataframe
     groups = groups.drop(columns="group_num")
+    dates_groups_cols = groups.columns.tolist()
 
     # Join the group first and last days dataframe to the selected data and to the original dataframe, joining on date.
     means = means.join(groups, on="date")
@@ -207,6 +218,7 @@ def calc_x_day_mean(data, x, keep_originals, data_types):
 
     # Rename the mean columns
     means = means.rename(columns=lambda name, x=x: f"{name}_mean{x}days")
+    means_cols = means.columns.tolist()
 
     # Join the mean data into the original dataframe
     data = data.join(means, on=group_cols) # Join the means into the original dataframe
@@ -216,9 +228,22 @@ def calc_x_day_mean(data, x, keep_originals, data_types):
         data[id_col] = data[id_col].replace(to_replace="n/a", value=np.nan)
 
     if not keep_originals:
-        cols_to_drop = ["date"] + data_types
-        data = data.drop(columns=cols_to_drop)
-        data = data.drop_duplicates()
+
+        meaned_cols_to_keep = id_cols + dates_groups_cols + means_cols
+        data = data[meaned_cols_to_keep]
+        data = data.drop_duplicates(keep="first")
+
+        if jhu: # Join back in the location columns
+
+            data = data.set_index(id_cols)
+            loc_table = get_jhu_location_data(update=False) # That way it will match whatever it was when they last downloaded the JHU data, because loading JHU data automatically loads the location table.
+            data = loc_table.merge(data, on=id_cols, how="right", suffixes=(False, False), validate="one_to_many")
+
+            # If it's the global table, drop the FIPS and Admin2 columns--they're only relevant for the US table
+            cols_to_check = ["FIPS", "Admin2"]
+            for col in cols_to_check:
+                if data[col].isnull().all():
+                    data = data.drop(columns=col)
 
     if wide: # Therefore, keep_originals is False, and the above block that drops columns was executed
         data = data.drop(columns="mean_group_start") # We'll use mean_group_end for the column indices
@@ -366,75 +391,3 @@ def calc_days_since_min_count(data, data_type, min_count, group_by):
     data = data.sort_values(by=[date_col] + group_by)
 
     return data
-
-# Helper functions
-def _wide_to_long(data, data_type):
-    """Convert a dataframe from wide format to long format.
-
-    Parameters:
-    data (pandas.DataFrame): The dataframe to convert. Must have dates in at least some of the columns.
-    data_type (str): The name of the data type the table contains.
-
-    Returns:
-    pandas.DataFrame: The dataframe in long format.
-    """
-    if not data.columns.map(lambda x: issubclass(type(x), datetime.date)).any():
-        raise ParameterError("Invalid table format. Must either have a 'date' column, or have dates as the columns.")
-
-    id_cols = [col for col in data.columns if not issubclass(type(col), datetime.date)]
-    data = pd.melt(data, id_vars=id_cols, var_name="date", value_name=data_type)
-
-    id_cols.append("date")
-    data = data.set_index(id_cols)
-
-    # Reorder index so date is first
-    idx_names = list(data.index.names)
-    idx_names.remove("date")
-    new_idx_name_order = ["date"] + idx_names
-    data = data.reorder_levels(new_idx_name_order)
-
-    # Convert index into just columns
-    data = data.reset_index()
-
-    return data
-
-def _long_to_wide(data, data_type, date_col="date", other_data_types_to_drop=[], sort_by=None):
-    """Convert a dataframe from long format to wide format.
-
-    Parameters:
-    data (pandas.DataFrame): The dataframe to convert.
-    data_type (str): The name of the data type to keep when we pivot.
-    date_col (str, optional): The name of the column with the dates in it. Default "date".
-    other_data_types_to_drop (list of str, optional): A list of other data_type columns that may exist in the table, which will be dropped. Note that if data_type is included in this list, it will actually not be dropped.
-    sort_by (str, optional): The name of one of the indexing columns to sort the dataframe by before returning it. Default of None causes no extra sorting to be performed.
-
-    Returns:
-    pandas.DataFrame: The dataframe in wide format.
-    """
-    # If there are multiple data type columns, only keep the one specified
-    cols_to_drop = [col for col in other_data_types_to_drop if col != data_type and col in data.columns]
-    data = data.drop(columns=cols_to_drop)
-
-    # Spread the table, a la tidyr
-    id_cols = [col for col in data.columns if col != data_type]
-    data = data.set_index(id_cols) # Putting these in the index keeps them from being spread
-    data = data.unstack(level=date_col, fill_value=0)
-    data.columns = data.columns.droplevel(0)
-    data.columns.name = None
-    if sort_by is not None:
-        data = data.sort_index(level=sort_by)
-    data = data.reset_index() # Take the saved columns out of the index
-
-    return data
-
-def _offset_subtract(col):
-    """Takes a column, creates a copy with all values moved down by one (last value dropped, zero inserted at start), then subtracts the copy from the original and returns the result. For use with dataframe.groupby(...).transform().
-
-    col (pandas.Series): The column to transform.
-
-    Returns:
-    pandas.Series: The transformed column.
-    """
-    offset = col.values[:-1]
-    offset = np.insert(offset, 0, 0)
-    return col - offset

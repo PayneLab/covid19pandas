@@ -18,9 +18,10 @@ import numpy as np
 import os
 import warnings
 import datetime
+
 from .download import download_github_file
-from .selectors import _wide_to_long, _long_to_wide
-from .exceptions import *
+from .exceptions import FileDoesNotExistError, NoInternetError, ParameterError, DeprecatedWarning, FileNotUpdatedWarning
+from .utils import _wide_to_long, _long_to_wide
 
 # Old getters
 def get_cases():
@@ -148,9 +149,7 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
         df = all_df
 
     # Get the location data and join it in
-    loc_table_base_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/"
-    loc_table_name = "UID_ISO_FIPS_LookUp_Table.csv"
-    loc_table = _get_table(loc_table_base_url, loc_table_name, source="jhu", update=update)
+    loc_table = get_jhu_location_data(update=update)
     if region == "global":
         loc_table = loc_table.rename(columns={"Country_Region": "Country/Region", "Province_State": "Province/State"})
         loc_table = loc_table[pd.isnull(loc_table["Admin2"])] # Drop location data for individual US counties--we only want state level data, to avoid duplicate rows
@@ -181,6 +180,21 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
 
     print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return df
+
+def get_jhu_location_data(update=True):
+    """Get the location data table from JHU (see https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv).
+
+    Parameters:
+    update (bool, optional): Whether to try updating the table. Default True.
+
+    Returns:
+    pandas.DataFrame: The location data table from JHU.
+    """
+
+    loc_table_base_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/"
+    loc_table_name = "UID_ISO_FIPS_LookUp_Table.csv"
+    loc_table = _get_table(loc_table_base_url, loc_table_name, source="jhu", update=update)
+    return loc_table
 
 def get_data_nyt(format="long", data_type="all", counties=False, update=True):
     """Get the most current data tables from NYT (https://github.com/nytimes/covid-19-data).

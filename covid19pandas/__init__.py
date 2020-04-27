@@ -26,8 +26,8 @@ import os
 import sys
 import warnings
 
-from .getters import *
-from .selectors import *
+from .getters import get_cases, get_deaths, get_recovered, get_data_jhu, get_jhu_location_data, get_data_nyt
+from .selectors import select_top_x_regions, select_regions, calc_x_day_mean, calc_daily_change, calc_days_since_min_count
 from .plotters import *
 from .download import download_text as _download_text
 from .exceptions import PackageError, NoInternetError, PackageWarning, OldPackageVersionWarning
