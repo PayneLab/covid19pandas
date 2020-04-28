@@ -115,9 +115,9 @@ class TestSelectors:
                         self._check_select_regions(df, format, cols_kept=cols_to_keep)
 
     # -------------------------------------------------------------------------------------------------------------
-    # Tests for calc_x_day_mean
+    # Tests for calc_x_day_rolling_mean
     # -------------------------------------------------------------------------------------------------------------
-    def test_calc_x_day_mean_jhu(self):
+    def test_calc_x_day_rolling_mean_jhu(self):
         for format in formats:
             for data_type in jhu_data_types:
                 for region in jhu_regions:
@@ -133,12 +133,12 @@ class TestSelectors:
                                 input_data_types.remove("recovered")
 
                             for input_data_type in input_data_types:
-                                self._check_calc_x_day_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
+                                self._check_calc_x_day_rolling_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
 
                         # Note that we still also perform this test if data_type == "all" because we can also calculate the x day mean for all columns.
-                        self._check_calc_x_day_mean(df, format, data_type)
+                        self._check_calc_x_day_rolling_mean(df, format, data_type)
 
-    def test_calc_x_day_mean_nyt(self):
+    def test_calc_x_day_rolling_mean_nyt(self):
         for format in formats:
             for data_type in nyt_data_types:
                 for county_option in nyt_county_options:
@@ -152,10 +152,10 @@ class TestSelectors:
                             input_data_types.remove("all")
 
                             for input_data_type in input_data_types:
-                                self._check_calc_x_day_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
+                                self._check_calc_x_day_rolling_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
                                 
                         # Note that we still also perform this test if data_type == "all" because we can also calculate the x day mean for all columns.
-                        self._check_calc_x_day_mean(df, format, data_type)
+                        self._check_calc_x_day_rolling_mean(df, format, data_type)
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_daily_change
@@ -379,7 +379,7 @@ class TestSelectors:
                             assert out[col].equals(df.loc[df[region_col].isin(regions), col])
 
     @staticmethod
-    def _check_calc_x_day_mean(df, format, data_type, other_input_data_types=[]):
+    def _check_calc_x_day_rolling_mean(df, format, data_type, other_input_data_types=[]):
 
         # Process the data_type parameter
         if data_type == "all":
@@ -394,66 +394,31 @@ class TestSelectors:
             raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', 'recovered', or 'all'.")
 
         mean_range = 3
-        if format == "long":
-            dfs = {
-                "just_meaned": cod.calc_x_day_mean(df, data_types=data_types, x=mean_range, keep_originals=False),
-                "originals_and_meaned": cod.calc_x_day_mean(df, data_types=data_types, x=mean_range, keep_originals=True),
-            }
-        else: # format == "wide"
-            dfs = {
-                "just_meaned": cod.calc_x_day_mean(df, data_types=data_types, x=mean_range, keep_originals=False),
-            }
+        dfs = {
+            "centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, x=mean_range, center=True),
+            "not_centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, x=mean_range, center=False),
+        }
 
         # Run basic table checks
         for name, out in dfs.items():
-            if name == "just_meaned" and format == "long":
-                # Search for defined id cols (based on data source and region)
-                if {"Combined_Key"}.issubset(df.columns): # JHU table
-                    group_cols = ["Combined_Key"]
-                elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
-                    group_cols = ["county", "state"]
-                elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
-                    group_cols = ["state"]
-                else:
-                    raise Exception("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
-
-                group_cols = ["mean_group_start"] + group_cols 
-                assert not out.duplicated(subset=group_cols).any()
-            else:
-                _check_gotten(out, format)
+            _check_gotten(out, format)
 
         # Check that data_types got averaged
         for out in dfs.values():
             for data_type in data_types:
                 if format == "long":
-                    assert f"{data_type}_mean{mean_range}days" in out.columns
+                    assert f"{data_type}_mean" in out.columns
                 else: # format == "wide"
                     assert not df.equals(out)
 
-        # If not keep originals, make sure originals were dropped
-        if format == "long":
-            for data_type in data_types:
-                assert data_type not in dfs["just_meaned"].columns
-
-        # Make sure other_input_data_types aren't in table if not keep originals
+        # Make sure other_input_data_types are unchanged
         if format == "long":
             for other_input in other_input_data_types:
-                assert other_input not in dfs["just_meaned"].columns
+                for out in dfs.values():
+                    assert out[other_input].equals(df[other_input])
 
-        # Make sure other_input_data_types are unchanged if kept originals
-        if format == "long":
-            for other_input in other_input_data_types:
-                assert dfs["originals_and_meaned"][other_input].equals(df[other_input])
-
-        # Check that number of unique in mean_group_start and end are len(unique(dates)) // x
         for out in dfs.values():
-            if format == "long":
-                assert out["mean_group_start"].unique().size == math.ceil(df["date"].unique().size / mean_range)
-                assert out["mean_group_end"].unique().size == math.ceil(df["date"].unique().size / mean_range)
-            else: # format == "wide"
-                num_out_dates = out.columns.map(lambda col: issubclass(type(col), datetime.date)).to_series().astype(bool).sum()
-                exp_num_out_dates = math.ceil(df.columns.map(lambda col: issubclass(type(col), datetime.date)).to_series().astype(bool).sum() / mean_range)
-                assert num_out_dates == exp_num_out_dates
+            print(out)
 
     @staticmethod
     def _check_daily_change(df, format, data_type, other_data_types=[]):

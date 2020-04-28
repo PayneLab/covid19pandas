@@ -130,31 +130,25 @@ def select_regions(data, region_col, regions, combine_subregions, data_cols_to_k
 
     return data
 
-def calc_x_day_mean(data, data_types, x, keep_originals):
-    """Take a table of daily counts, and calculate the mean of the counts for each set of x consecutive days (e.g., a 3 day mean).
+def calc_x_day_rolling_mean(data, data_types, x, center=True):
+    """Calculate a centered rolling mean with x days for each number in a count.
 
     Parameters:
-    data (pandas.DataFrame): The data to calculate the means of.
-    data_types (str or list of str): The data columns in your table that you want to calculate the x day group means for.
+    data (pandas.DataFrame): The data to calculate the rolling means for.
+    data_types (str or list of str): The data columns in your table that you want to calculate the x day rolling means for. If you pass a wide format table, this parameter is meaningless since the data is obviously just whatever is in the date columns, so you can just pass an empty list for this parameter in that case.
     x (int): The number of days to calculate the means over.
-    keep_originals (bool): Whether to keep the original values. Otherwise, the function just returns the means.
+    center (bool, optional): Whether to center the window on each value. Default True.
 
     Returns:
-    pandas.DataFrame: The table, with means calculated over the specified number of days.
+    pandas.DataFrame: The table, with rolling means calculated over the specified number of days.
     """
-    wide = False
-    if "date" not in data.columns:
-        wide = True
-
-    if wide and keep_originals:
-        raise ParameterError("You appear to have passed a wide format table, as there is no column of dates in the table. It is not possible to keep the original counts for a wide format table. Either pass a long format table, or pass keep_originals=False.")
 
     # Convert from str to list input if needed
     if isinstance(data_types, str):
         data_types = [data_types]
 
     # Search for defined location id cols (based on data source and region)
-    jhu = False # For optional step later to drop non-averaged numbers
+    jhu = False
     if {"Combined_Key"}.issubset(data.columns): # JHU table
         id_cols = ["Combined_Key"]
         jhu = True
@@ -165,7 +159,10 @@ def calc_x_day_mean(data, data_types, x, keep_originals):
     else:
         raise ParameterError("The dataframe you passed does not contain any of the standard location identification columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{data.columns}")
 
-    if wide:
+    # Deal with wide format tables
+    wide = False
+    if "date" not in data.columns:
+        wide = True
         data = _wide_to_long(data, "generic_data_type") # We use generic because if it's a wide table, we know there's only one data type, but we don't know what it is
         data_types = ["generic_data_type"]
 
@@ -174,62 +171,31 @@ def calc_x_day_mean(data, data_types, x, keep_originals):
     if len(not_in) > 0:
         raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_types parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
 
-    # Extract date, id, and data cols
-    cols_to_keep = [col for col in data.columns if col == "date" or col in id_cols + data_types]        
-    means = data[cols_to_keep]
-    
-    # Get list of unique dates
-    dates = means["date"].drop_duplicates(keep="first")
-
-    # Generate a sequence assigning group numbers to each date, and make it a dataframe
-    num_groups = len(dates) // x + 1
-    group_nums = np.repeat(range(0, num_groups), x)
-    group_nums = group_nums[0: len(dates)]
-    groups = pd.DataFrame({"group_num": group_nums}, index=dates)
-    
-    # Use drop_duplicates keep parameter to get last and first days for each group
-    first_days = groups["group_num"].drop_duplicates(keep="first")
-    last_days = groups["group_num"].drop_duplicates(keep="last")
-
-    # Swap the index and values for each of those two series, so we can join on the day numbers
-    first_days = pd.Series(first_days.index, index=first_days, name="mean_group_start")
-    last_days = pd.Series(last_days.index, index=last_days, name="mean_group_end")
-
-    # Join those series into the group nums dataframe, joining on group num
-    groups = groups.join(first_days, on="group_num")
-    groups = groups.join(last_days, on="group_num")
-
-    # Drop the group num column from the group dataframe
-    groups = groups.drop(columns="group_num")
-    dates_groups_cols = groups.columns.tolist()
-
-    # Join the group first and last days dataframe to the selected data and to the original dataframe, joining on date.
-    means = means.join(groups, on="date")
-    data = data.join(groups, on="date")
-
     # Fill NaNs in the grouping columns, so they don't get messed up in groupby or join operations
     for id_col in id_cols:
-        means[id_col] = means[id_col].fillna("n/a")
         data[id_col] = data[id_col].fillna("n/a")
 
-    # Group by first day and id cols, and aggregate
-    group_cols = id_cols + ["mean_group_start"]
-    means = means.groupby(group_cols).aggregate(np.mean)
+    # For each data_type, group by the id cols and calculate a rolling mean with a window x days wide, then join back into the original table
+    data_date_idx = data.set_index("date") # So that the groupby and rolling calculations will work properly
+    means_cols = []
 
-    # Rename the mean columns
-    means = means.rename(columns=lambda name, x=x: f"{name}_mean{x}days")
-    means_cols = means.columns.tolist()
+    for data_type in data_types:
+        means = data_date_idx.groupby(id_cols)[data_type].rolling(window=x, min_periods=1, center=center).mean()
 
-    # Join the mean data into the original dataframe
-    data = data.join(means, on=group_cols) # Join the means into the original dataframe
-    
+        col_name = f"{data_type}_mean"
+        means.name = col_name
+        means_cols.append(col_name)
+
+        data = data.join(means, on=id_cols + ["date"])
+
     # Put the NaNs back in
     for id_col in id_cols:
         data[id_col] = data[id_col].replace(to_replace="n/a", value=np.nan)
 
-    if not keep_originals:
+    if wide:
 
-        meaned_cols_to_keep = id_cols + dates_groups_cols + means_cols
+        # Convert back
+        meaned_cols_to_keep = ["date"] + id_cols + means_cols
         data = data[meaned_cols_to_keep]
         data = data.drop_duplicates(keep="first")
 
@@ -245,9 +211,7 @@ def calc_x_day_mean(data, data_types, x, keep_originals):
                 if data[col].isnull().all():
                     data = data.drop(columns=col)
 
-    if wide: # Therefore, keep_originals is False, and the above block that drops columns was executed
-        data = data.drop(columns="mean_group_start") # We'll use mean_group_end for the column indices
-        data = _long_to_wide(data, data_type=f"generic_data_type_mean{x}days", date_col="mean_group_end")
+        data = _long_to_wide(data, data_type=means_cols[0])
 
     return data
 
