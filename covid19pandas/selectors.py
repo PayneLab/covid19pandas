@@ -23,62 +23,96 @@ from .exceptions import ParameterError
 from .getters import get_jhu_location_data
 from .utils import _long_to_wide, _wide_to_long, _offset_subtract
 
-def select_top_x_regions(data, region_col, data_type, x, combine_subregions, other_data_cols_to_keep, exclude=[]):
+def select_top_x_regions(data, region_cols, data_type, x, combine_subregions=True, other_data_cols=[], exclude=[]):
     """Select the top x regions with the most cases, deaths, recoveries, or count of another data type.
 
     Parameters:
     data (pandas.DataFrame): The dataframe from which to select data.
-    region_col (str): The name of the column that contains the region designations you want to group by.
+    region_cols (str or list of str): The name(s) of the column(s) that contain the region designations you want to group by.
     data_type (str): The data type you want to rank regions by, e.g. "cases", "deaths", or "recovered". Or a different column name if you like.
-    x (int): The number of top regions to keep. Default 10.
-    combine_subregions (bool): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Otherwise, keeps the region broken into subregions. Default True.
-    other_data_cols_to_keep (list of str, optional): A list of other data columns in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. We drop other columns by default, because numerical columns like Latitude and Longitude or FIPS would be messed up by the aggregation. This parameter has no effect if combine_subregions is False.
-    exclude (list of str, optional): A list of regions to exclude from the selection. If an excluded region made the cut, the next highest region will take its place.
+    x (int): The number of top regions to keep.
+    combine_subregions (bool, optional): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Otherwise, keeps the region broken into subregions. Default True.
+    other_data_cols (list of str, optional): A list of other data columns in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. This parameter has no effect if combine_subregions is False. Default empty list.
+    exclude (list of str, optional): A list of regions to exclude from the selection. If you passed multiple region cols, a region with a value in any of those columns that matches a value in this list will be excluded. If an excluded region made the cut, the next highest region will take its place. Default empty list.
 
     Returns:
     pandas.DataFrame: Counts for the top x regions.
     """
+
+    # If they give us a wide format table, make a long format copy for determining the top x regions
     if "date" not in data.columns:
-        long_data = _wide_to_long(data, data_type) # If they give us a wide format table, convert it to long format.
+        long_data = _wide_to_long(data, data_type) 
     else:
         long_data = data.copy()
 
+    # Check that data_type is in the dataframe
     if data_type not in long_data.columns:
         raise ParameterError(f"There is no '{data_type}' column in the dataframe you passed. Existing columns: \n{data.columns}")
 
-    last_day = long_data["date"].max() # Get the last recorded day
+    # Process string input for region grouping cols
+    if isinstance(region_cols, str):
+        region_cols = [region_cols]
+
+    # Find the top x regions
+    # Get the last recorded day
+    last_day = long_data["date"].max() 
 
     current_ct = long_data[long_data['date'] == last_day] # Pull all records for that day
-    current_ct = long_data[['date', region_col, data_type]]
-    current_ct = current_ct[~current_ct[region_col].isin(exclude)] # Select only columns where the region_col value is not in the exclude list
-    current_ct = current_ct.fillna("n/a") # Fill NaNs so they aren't excluded in groupby
-    current_ct = current_ct.groupby(region_col).aggregate(np.sum) # Sum all counts for today in subregions within that regions
+    current_ct = long_data[['date', data_type] + region_cols]
 
-    top_x_names = current_ct.sort_values(by=data_type).tail(x) # Get the names of the top regions
-    top_x_cts = data[data[region_col].isin(top_x_names.index)] # Filter out other regions
+    # Select only rows where region_cols values are not in the exclude list
+    for region_col in region_cols: 
+        current_ct = current_ct[~current_ct[region_col].isin(exclude)] 
+
+    # Fill NaNs so they aren't excluded in groupby and can match in joins
+    for region_col in region_cols: 
+        current_ct[region_col] = current_ct[region_col].fillna("n/a") 
+        data[region_col] = data[region_col].fillna("n/a")
+
+    # Sum all counts for today in subregions within regions. Now we have to totals for all the regions for the most recent day.
+    current_ct = current_ct.groupby(region_cols).aggregate(np.sum) 
+
+    # Sort the table by the data_type, then select the last x names--they are the top x regions
+    top_x_names = current_ct.sort_values(by=data_type).tail(x) 
+    top_x_names = top_x_names.drop(columns=data_type) # So that we don't have column overlap when joining with the original data table. So now top_x_names is a dataframe with just an index and no columns, but still joinable
+
+    # Select data for the top regions
+    data = data.join(top_x_names, on=region_cols, how="inner")
+
+    # Put the NaNs back in
+    for region_col in region_cols: 
+        data[region_col] = data[region_col].replace(to_replace="n/a", value=np.nan)
+
+    # If it's long format, sort everything by date first again.
+    if "date" in data.columns:
+        data = data.sort_values(by=["date"] + region_cols)
 
     if combine_subregions:
-        # Make sure that the other_data_cols_to_keep columns all exist
-        not_in = [col for col in other_data_cols_to_keep if not col in data.columns]
+        # Make sure that the other_data_cols columns all exist
+        not_in = [col for col in other_data_cols if not col in data.columns]
         if len(not_in) > 0:
-            raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the other_data_cols_to_keep parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
+            raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the other_data_cols parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
 
         # Drop columns that would be messed up by the groupby
-        cols_to_not_drop = ["date", region_col, data_type] + other_data_cols_to_keep
-        cols_to_drop = [col for col in top_x_cts.columns if col not in cols_to_not_drop and not issubclass(type(col), datetime.date)]
-        top_x_cts = top_x_cts.drop(columns=cols_to_drop)
+        cols_to_not_drop = ["date", data_type] + region_cols + other_data_cols
+        cols_to_drop = [col for col in data.columns if col not in cols_to_not_drop and not issubclass(type(col), datetime.date)]
+        data = data.drop(columns=cols_to_drop)
 
         # Determine the id cols to group by, and fill NaNs in them so those aren't excluded in groupby
-        id_cols = top_x_cts.columns[top_x_cts.columns.isin(["date", region_col])].tolist()
+        id_cols = data.columns[data.columns.isin(["date"] + region_cols)].tolist()
         for id_col in id_cols:
-            top_x_cts[id_col] = top_x_cts[id_col].fillna("n/a") 
+            data[id_col] = data[id_col].fillna("n/a") 
 
-        top_x_cts = top_x_cts.groupby(id_cols).aggregate(np.sum).reset_index() # Sum up total counts per day for each country
-        top_x_cts = top_x_cts.replace(to_replace="n/a", value=np.nan) # Put the NaNs back in
+        # Sum up total counts per day for each country
+        data = data.groupby(id_cols).aggregate(np.sum).reset_index() 
 
-    return top_x_cts
+        # Put the NaNs back in
+        for id_col in id_cols:
+            data[id_col] = data[id_col].replace(to_replace="n/a", value=np.nan) 
 
-def select_regions(data, region_col, regions, combine_subregions, data_cols_to_keep=[]):
+    return data
+
+def select_regions(data, region_col, regions, combine_subregions=False, data_cols=[]):
     """Select all data for particular regions within a table, optionally summing counts for subregions into one count for each region for each day.
     
     Parameters:
@@ -86,7 +120,7 @@ def select_regions(data, region_col, regions, combine_subregions, data_cols_to_k
     region_col (str): The name of the column that contains the region designation you're specifying by. E.g., if you want to select particular states, pass the name of the state column
     regions (str or list of str): The regions to select.
     combine_subregions (bool): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Default True. Otherwise, keeps the regions broken into subregions. 
-    data_cols_to_keep (str or list of str, optional): Only required for long format tables. This is the data column(s) in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. We drop other columns by default, because numerical columns like Latitude and Longitude or FIPS would be messed up by the aggregation. This parameter has no effect if combine_subregions is False or you pass a wide format table; default is an empty list.
+    data_cols (str or list of str, optional): Only required when passing long format tables and combine_subregions is True. These are the data column(s) in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. Default is an empty list.
 
     Returns:
     pandas.DataFrame: The data for the specified regions.
@@ -94,8 +128,8 @@ def select_regions(data, region_col, regions, combine_subregions, data_cols_to_k
     # Allow them to pass either a string for one column, or a list of str for several columns.
     if isinstance(regions, str):
         regions = [regions]
-    if isinstance(data_cols_to_keep, str):
-        data_cols_to_keep = [data_cols_to_keep]
+    if isinstance(data_cols, str):
+        data_cols = [data_cols]
 
     # Select the data
     data = data[data[region_col].isin(regions)]
@@ -105,16 +139,16 @@ def select_regions(data, region_col, regions, combine_subregions, data_cols_to_k
         if "date" in data.columns: # Long format table
             group_cols = ["date", region_col]
 
-            # Make sure that the data_cols_to_keep columns all exist
-            not_in = [col for col in data_cols_to_keep if not col in data.columns]
+            # Make sure that the data_cols columns all exist
+            not_in = [col for col in data_cols if not col in data.columns]
             if len(not_in) > 0:
-                raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_cols_to_keep parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
+                raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_cols parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
 
         else:
             group_cols = [region_col] # Wide format table
 
         # Drop columns that would be messed up by the groupby
-        cols_to_not_drop = group_cols + data_cols_to_keep
+        cols_to_not_drop = group_cols + data_cols
         cols_to_drop = [col for col in data.columns if col not in cols_to_not_drop and not issubclass(type(col), datetime.date)]
         data = data.drop(columns=cols_to_drop)
 
@@ -195,8 +229,8 @@ def calc_x_day_rolling_mean(data, data_types, x, center=True):
     if wide:
 
         # Convert back
-        meaned_cols_to_keep = ["date"] + id_cols + means_cols
-        data = data[meaned_cols_to_keep]
+        meaned_cols_keep = ["date"] + id_cols + means_cols
+        data = data[meaned_cols_keep]
         data = data.drop_duplicates(keep="first")
 
         if jhu: # Join back in the location columns
