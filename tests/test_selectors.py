@@ -57,9 +57,14 @@ class TestSelectors:
                                 compare_by_types.remove("recovered")
 
                             for compare_by_type in compare_by_types:
-                                self._check_select_top_x(df, format, compare_by_type, other_to_keep=[col for col in compare_by_types if col != compare_by_type])
+                                self._check_select_top_x(df, format, compare_by_type, num_regions=1) # Don't keep others
+                                self._check_select_top_x(df, format, compare_by_type, num_regions=1, other_to_keep=[col for col in compare_by_types if col != compare_by_type]) # Keep others
+
+                                self._check_select_top_x(df, format, compare_by_type, num_regions=2) # Don't keep others
+                                self._check_select_top_x(df, format, compare_by_type, num_regions=2, other_to_keep=[col for col in compare_by_types if col != compare_by_type]) # Keep others
                         else:
-                            self._check_select_top_x(df, format, data_type)
+                            self._check_select_top_x(df, format, data_type, num_regions=1)
+                            self._check_select_top_x(df, format, data_type, num_regions=2)
 
     def test_select_top_x_nyt(self):
         for format in formats:
@@ -74,9 +79,19 @@ class TestSelectors:
                             compare_by_types = set(nyt_data_types)
                             compare_by_types.remove("all")
                             for compare_by_type in compare_by_types:
-                                self._check_select_top_x(df, format, compare_by_type, other_to_keep=[col for col in compare_by_types if col != compare_by_type])
+                                self._check_select_top_x(df, format, compare_by_type, num_regions=1) # Don't keep others
+                                self._check_select_top_x(df, format, compare_by_type, num_regions=1, other_to_keep=[col for col in compare_by_types if col != compare_by_type]) # Keep others
+
+                                # It only will work to do more than 1 grouping col if we're using the states and counties table, because the just states table only has one grouping col
+                                if county_option:
+                                    self._check_select_top_x(df, format, compare_by_type, num_regions=2) # Don't keep others
+                                    self._check_select_top_x(df, format, compare_by_type, num_regions=2, other_to_keep=[col for col in compare_by_types if col != compare_by_type]) # Keep others
                         else:
-                            self._check_select_top_x(df, format, data_type)
+                            self._check_select_top_x(df, format, data_type, num_regions=1)
+
+                            # It only will work to do more than 1 grouping col if we're using the states and counties table, because the just states table only has one grouping col
+                            if county_option:
+                                self._check_select_top_x(df, format, data_type, num_regions=2)
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for select_regions
@@ -241,89 +256,202 @@ class TestSelectors:
     # Helper methods
     # -------------------------------------------------------------------------------------------------------------
     @staticmethod
-    def _check_select_top_x(df, format, data_type, other_to_keep=[]):
+    def _check_select_top_x(df, format, data_type, num_regions, other_to_keep=[]):
 
-        # Search for defined region cols (based on data source)
-        if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
-            region_col = "Country/Region"
-            exclude = ["US", "China"]
-        elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
-            region_col = "Province_State"
-            exclude = ["New York", "Illinois"]
-        elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table.
-            region_col = "state"
-            exclude = ["Washington", "Illinois"]
-        else:
-            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
-
-        if format == "wide":
-            group_cols = [region_col]
-        else: # format == "long"
-            group_cols = ["date", region_col]
-
-        num_top = 10
-        # Call the function
-        outs = {
-            "top": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols_to_keep=other_to_keep),
-            "top_others_kept": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols_to_keep=other_to_keep),
-            "top_uncombined": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=num_top, combine_subregions=False, other_data_cols_to_keep=other_to_keep),
-            "top_with_exclusions": cod.select_top_x_regions(df, region_col=region_col, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols_to_keep=other_to_keep, exclude=exclude),
-        }
-
-        # Run basic table checks
-        for name, out in outs.items():
-
-            if name == "top_uncombined" and {"Admin2"}.issubset(df.columns):
-                _check_gotten(out, format, group_cols=group_cols + ["Admin2"]) # If it's the JHU U.S. table, we need to add "Admin2" as a group col, but only for the uncombined table.
-            elif name == "top_uncombined" and {"Province/State"}.issubset(df.columns):
-                _check_gotten(out, format, group_cols=group_cols + ["Province/State"]) # If it's the JHU global table, we need to add "Province/State" as a group col, but only for the uncombined table.
-            elif name == "top_uncombined" and {"county"}.issubset(df.columns):
-                _check_gotten(out, format, group_cols=group_cols + ["county"]) # If it's the NYT county table, we need to add "county" as a group col, but only for the uncombined table.
+        if num_regions == 1:
+            # Search for defined region cols (based on data source)
+            if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
+                region_col = "Country/Region"
+                exclude = ["US", "China"]
+            elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+                region_col = "Province_State"
+                exclude = ["New York", "Illinois"]
+            elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table.
+                region_col = "state"
+                exclude = ["Washington", "Illinois"]
             else:
+                raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
+            if format == "wide":
+                group_cols = [region_col]
+            else: # format == "long"
+                group_cols = ["date", region_col]
+
+            num_top = 10
+            # Call the function
+            outs = {
+                "top_others_kept": cod.select_top_x_regions(df, region_cols=region_col, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep),
+                "top_uncombined": cod.select_top_x_regions(df, region_cols=region_col, data_type=data_type, x=num_top, combine_subregions=False, other_data_cols=other_to_keep),
+                "top_with_exclusions": cod.select_top_x_regions(df, region_cols=region_col, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep, exclude=exclude),
+            }
+
+            # Run basic table checks
+            for name, out in outs.items():
+
+                if name == "top_uncombined" and {"Admin2"}.issubset(df.columns):
+                    _check_gotten(out, format, group_cols=group_cols + ["Admin2"]) # If it's the JHU U.S. table, we need to add "Admin2" as a group col, but only for the uncombined table.
+                elif name == "top_uncombined" and {"Province/State"}.issubset(df.columns):
+                    _check_gotten(out, format, group_cols=group_cols + ["Province/State"]) # If it's the JHU global table, we need to add "Province/State" as a group col, but only for the uncombined table.
+                elif name == "top_uncombined" and {"county"}.issubset(df.columns):
+                    _check_gotten(out, format, group_cols=group_cols + ["county"]) # If it's the NYT county table, we need to add "county" as a group col, but only for the uncombined table.
+                else:
+                    _check_gotten(out, format, group_cols=group_cols)
+
+            # Make sure that the data values weren't changed, if we didn't aggregate
+            if format == "wide":
+                for name, out in outs.items():
+                    df_dates = df.columns[df.columns.map(lambda col: issubclass(type(col), datetime.date))]
+                    out_dates = out.columns[out.columns.map(lambda col: issubclass(type(col), datetime.date))]
+                    assert df_dates.equals(out_dates)
+
+                    if name == "top_uncombined":
+                        for date in df_dates:
+                            for region in out[region_col].unique():
+                                assert out.loc[out[region_col] == region, date].equals(df.loc[df[region_col] == region, date])
+            else:
+                for name, out in outs.items():
+                    assert data_type in out.columns
+                    if name == "top_uncombined":
+                        for region in out[region_col].unique():
+                            assert out.loc[out[region_col] == region, data_type].equals(df.loc[df[region_col] == region, data_type])
+
+            # If we had other cols to keep, make sure they were kept, and are equal to their original values.
+            for keep in other_to_keep:
+                for name, out in outs.items():
+                    assert keep in out.columns
+                    if name == "top_uncombined":
+                        for region in out[region_col].unique():
+                            assert out.loc[out[region_col] == region, keep].equals(df.loc[df[region_col] == region, keep])
+
+            # Check that the excluded countries aren't in the list
+            assert not outs["top_with_exclusions"][region_col].isin(exclude).any()
+
+            # Check that length of combined table is x * len(unique(dates))
+            if format == "wide":
+                for name, out in outs.items():
+                    if name != "top_uncombined":
+                        assert out.shape[0] == num_top
+                        assert out.shape[0] == out[region_col].unique().size
+            else:
+                for name, out in outs.items():
+                    if name == "top_uncombined":
+                        assert out.shape[0] == df[region_col].isin(out[region_col]).sum()
+                    else:
+                        assert out.shape[0] <= num_top * out["date"].unique().size # We check <= because some of the regions may not have counts for all days at the beginning
+                        assert num_top == out[region_col].unique().size
+        elif num_regions == 2:
+
+            # Search for defined region cols (based on data source)
+            if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
+                region_cols = ["Country/Region", "Province/State"]
+                exclude = ["US", "China"]
+            elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+                region_cols = ["Province_State", "Admin2"]
+                exclude = ["New York", "Illinois"]
+            elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
+                region_cols = ["county", "state"]
+                exclude = ["Washington", "Illinois"]
+            elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
+                raise Exception("Can't do more than one region col for NYT states only table.")
+            else:
+                raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
+            num_top = 10
+            # Call the function
+            outs = {
+                "top_others_kept": cod.select_top_x_regions(df, region_cols=region_cols, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep),
+                "top_uncombined": cod.select_top_x_regions(df, region_cols=region_cols, data_type=data_type, x=num_top, combine_subregions=False, other_data_cols=other_to_keep),
+                "top_with_exclusions": cod.select_top_x_regions(df, region_cols=region_cols, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep, exclude=exclude),
+            }
+
+            # Run basic table checks
+            if format == "wide":
+                group_cols = region_cols
+            else: # format == "long"
+                group_cols = ["date"] + region_cols
+
+            for name, out in outs.items():
                 _check_gotten(out, format, group_cols=group_cols)
 
-        # Make sure that the data values weren't changed, if we didn't aggregate
-        if format == "wide":
-            for name, out in outs.items():
-                df_dates = df.columns[df.columns.map(lambda col: issubclass(type(col), datetime.date))]
-                out_dates = out.columns[out.columns.map(lambda col: issubclass(type(col), datetime.date))]
-                assert df_dates.equals(out_dates)
+            # For these tests, we need any NaNs in the region cols to be filled with strings so they can compare equal.
+            for name in outs.keys():
+                out = outs[name]
+                for region_col in region_cols:
+                    out[region_col] = out[region_col].fillna("n/a")
 
-                if name == "top_uncombined":
-                    for date in df_dates:
-                        for region in out[region_col].unique():
-                            assert out.loc[out[region_col] == region, date].equals(df.loc[df[region_col] == region, date])
-        else:
-            for name, out in outs.items():
-                assert data_type in out.columns
-                if name == "top_uncombined":
-                    for region in out[region_col].unique():
-                        assert out.loc[out[region_col] == region, data_type].equals(df.loc[df[region_col] == region, data_type])
+                outs[name] = out
+                    
+            for region_col in region_cols:
+                df[region_col] = df[region_col].fillna("n/a")
 
-        # If we had other cols to keep, make sure they were kept, and are equal to their original values.
-        for keep in other_to_keep:
-            for name, out in outs.items():
-                assert keep in out.columns
-                if name == "top_uncombined":
-                    for region in out[region_col].unique():
-                        assert out.loc[out[region_col] == region, keep].equals(df.loc[df[region_col] == region, keep])
+            # Make sure that the data values weren't changed, if we didn't aggregate
+            if format == "wide":
+                for name, out in outs.items():
+                    df_dates = df.columns[df.columns.map(lambda col: issubclass(type(col), datetime.date))]
+                    out_dates = out.columns[out.columns.map(lambda col: issubclass(type(col), datetime.date))]
+                    assert df_dates.equals(out_dates)
 
-        # Check that the excluded countries aren't in the list
-        assert not outs["top_with_exclusions"][region_col].isin(exclude).any()
+                    if name == "top_uncombined":
+                        for date in df_dates:
+                            region_combos = out[region_cols].drop_duplicates(keep="first")
+                            rcol1 = region_cols[0]
+                            rcol2 = region_cols[1]
 
-        # Check that length of combined table is x * len(unique(dates))
-        if format == "wide":
-            for name, out in outs.items():
-                if name != "top_uncombined":
-                    assert out.shape[0] == num_top
-                    assert out.shape[0] == out[region_col].unique().size
-        else:
-            for name, out in outs.items():
-                if name == "top_uncombined":
-                    assert out.shape[0] == df[region_col].isin(out[region_col]).sum()
-                else:
-                    assert out.shape[0] <= num_top * out["date"].unique().size # We check <= because some of the regions may not have counts for all days at the beginning
-                    assert num_top == out[region_col].unique().size
+                            for i in range(0, region_combos.index.size):
+                                rval1 = region_combos.iloc[i, 0]
+                                rval2 = region_combos.iloc[i, 1]
+
+                                assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), date].equals(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), date])
+            else:
+                for name, out in outs.items():
+                    assert data_type in out.columns
+                    if name == "top_uncombined":
+                        region_combos = out[region_cols].drop_duplicates(keep="first")
+                        rcol1 = region_cols[0]
+                        rcol2 = region_cols[1]
+
+                        for i in range(0, region_combos.index.size):
+                            rval1 = region_combos.iloc[i, 0]
+                            rval2 = region_combos.iloc[i, 1]
+
+                            assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), data_type].equals(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), data_type])
+
+            # If we had other cols to keep, make sure they were kept, and are equal to their original values.
+            for keep in other_to_keep:
+                for name, out in outs.items():
+                    assert keep in out.columns
+                    if name == "top_uncombined":
+                        region_combos = out[region_cols].drop_duplicates(keep="first")
+                        rcol1 = region_cols[0]
+                        rcol2 = region_cols[1]
+
+                        for i in range(0, region_combos.index.size):
+                            rval1 = region_combos.iloc[i, 0]
+                            rval2 = region_combos.iloc[i, 1]
+
+                            assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), keep].equals(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), keep])
+
+            # Check that the excluded countries aren't in the list
+            for region_col in region_cols:
+                assert not outs["top_with_exclusions"][region_col].isin(exclude).any()
+
+            # Check that length of combined table is x * len(unique(dates))
+            if format == "wide":
+                for name, out in outs.items():
+                    if name != "top_uncombined":
+                        assert out.shape[0] == num_top
+                        assert out.shape[0] == out[region_cols].drop_duplicates(keep="first").index.size
+            else:
+                for name, out in outs.items():
+                    if name == "top_uncombined":
+                        rcol1 = region_cols[0]
+                        rcol2 = region_cols[1]
+                        assert out.shape[0] == df[region_cols].isin({rcol1: out[rcol1], rcol2: out[rcol2]}).all(axis="columns").sum()
+                    else:
+                        assert out.shape[0] <= num_top * out["date"].unique().size # We check <= because some of the regions may not have counts for all days at the beginning
+                        assert num_top == out[region_cols].drop_duplicates(keep="first").index.size
+        else: 
+            raise Exception("Test doesn't support that number of regions. Options are 1 or 2.")
 
     @staticmethod
     def _check_select_regions(df, format, cols_kept):
@@ -343,8 +471,8 @@ class TestSelectors:
 
         # Call the function
         dfs = {
-            "selected": cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=True, data_cols_to_keep=cols_kept),
-            "selected_uncombined": cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=False, data_cols_to_keep=cols_kept),
+            "selected": cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=True, data_cols=cols_kept),
+            "selected_uncombined": cod.select_regions(df, region_col=region_col, regions=regions, combine_subregions=False, data_cols=cols_kept),
         }
 
         # Run basic table checks
