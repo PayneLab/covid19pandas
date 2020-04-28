@@ -134,8 +134,9 @@ class TestSelectors:
 
                             for input_data_type in input_data_types:
                                 self._check_calc_x_day_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
-                        else:
-                            self._check_calc_x_day_mean(df, format, data_type)
+
+                        # Note that we still also perform this test if data_type == "all" because we can also calculate the x day mean for all columns.
+                        self._check_calc_x_day_mean(df, format, data_type)
 
     def test_calc_x_day_mean_nyt(self):
         for format in formats:
@@ -152,8 +153,9 @@ class TestSelectors:
 
                             for input_data_type in input_data_types:
                                 self._check_calc_x_day_mean(df, format, data_type=input_data_type, other_input_data_types=[col for col in input_data_types if col != input_data_type])
-                        else:
-                            self._check_calc_x_day_mean(df, format, data_type)
+                                
+                        # Note that we still also perform this test if data_type == "all" because we can also calculate the x day mean for all columns.
+                        self._check_calc_x_day_mean(df, format, data_type)
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_daily_change
@@ -166,6 +168,17 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_jhu(format=format, data_type=data_type, region=region, update=False)
+
+                        if data_type == "all":
+                            input_data_types = set(jhu_data_types)
+                            input_data_types.remove("all")
+                            if region == "us":
+                                input_data_types.remove("recovered")
+
+                            for input_data_type in input_data_types:
+                                self._check_daily_change(df, format=format, data_type=input_data_type, other_data_types=[col for col in input_data_types if col != input_data_type])
+
+                        # Note that we still also perform this test if data_type == "all" because we can also calculate daily change for all columns.
                         self._check_daily_change(df, format=format, data_type=data_type)
 
     def test_calc_daily_change_long_nyt(self):
@@ -176,6 +189,15 @@ class TestSelectors:
                         pass # Invalid table parameter combination
                     else:
                         df = cod.get_data_nyt(format=format, data_type=data_type, counties=county_option, update=False)
+
+                        if data_type == "all":
+                            input_data_types = set(nyt_data_types)
+                            input_data_types.remove("all")
+
+                            for input_data_type in input_data_types:
+                                self._check_daily_change(df, format=format, data_type=input_data_type, other_data_types=[col for col in input_data_types if col != input_data_type])
+
+                        # Note that we still also perform this test if data_type == "all" because we can also calculate daily change for all columns.
                         self._check_daily_change(df, format=format, data_type=data_type)
 
     # -------------------------------------------------------------------------------------------------------------
@@ -359,15 +381,27 @@ class TestSelectors:
     @staticmethod
     def _check_calc_x_day_mean(df, format, data_type, other_input_data_types=[]):
 
+        # Process the data_type parameter
+        if data_type == "all":
+
+            data_types = ["cases", "deaths"]
+            if "recovered" in df.columns:
+                data_types.append("recovered")
+
+        elif data_type in ["cases", "deaths", "recovered"]:
+            data_types = [data_type]
+        else:
+            raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', 'recovered', or 'all'.")
+
         mean_range = 3
         if format == "long":
             dfs = {
-                "just_meaned": cod.calc_x_day_mean(df, data_types=data_type, x=mean_range, keep_originals=False),
-                "originals_and_meaned": cod.calc_x_day_mean(df, data_types=data_type, x=mean_range, keep_originals=True),
+                "just_meaned": cod.calc_x_day_mean(df, data_types=data_types, x=mean_range, keep_originals=False),
+                "originals_and_meaned": cod.calc_x_day_mean(df, data_types=data_types, x=mean_range, keep_originals=True),
             }
         else: # format == "wide"
             dfs = {
-                "just_meaned": cod.calc_x_day_mean(df, data_types=data_type, x=mean_range, keep_originals=False),
+                "just_meaned": cod.calc_x_day_mean(df, data_types=data_types, x=mean_range, keep_originals=False),
             }
 
         # Run basic table checks
@@ -388,21 +422,28 @@ class TestSelectors:
             else:
                 _check_gotten(out, format)
 
-        # Check that data_type got averaged
+        # Check that data_types got averaged
         for out in dfs.values():
-            if format == "long":
-                assert f"{data_type}_mean{mean_range}days" in out.columns
-            else: # format == "wide"
-                assert not df.equals(out)
+            for data_type in data_types:
+                if format == "long":
+                    assert f"{data_type}_mean{mean_range}days" in out.columns
+                else: # format == "wide"
+                    assert not df.equals(out)
 
         # If not keep originals, make sure originals were dropped
         if format == "long":
-            assert data_type not in dfs["just_meaned"].columns
+            for data_type in data_types:
+                assert data_type not in dfs["just_meaned"].columns
 
         # Make sure other_input_data_types aren't in table if not keep originals
         if format == "long":
             for other_input in other_input_data_types:
                 assert other_input not in dfs["just_meaned"].columns
+
+        # Make sure other_input_data_types are unchanged if kept originals
+        if format == "long":
+            for other_input in other_input_data_types:
+                assert dfs["originals_and_meaned"][other_input].equals(df[other_input])
 
         # Check that number of unique in mean_group_start and end are len(unique(dates)) // x
         for out in dfs.values():
@@ -415,12 +456,13 @@ class TestSelectors:
                 assert num_out_dates == exp_num_out_dates
 
     @staticmethod
-    def _check_daily_change(df, format, data_type):
+    def _check_daily_change(df, format, data_type, other_data_types=[]):
         """Verifies that when df is passed to calc_daily_change, the daily count columns generated are correct.
 
         df (pandas.DataFrame): A dataframe from the package.
         format (str): The format of the table. Either "wide" or "long".
         data_type (str): The data type the table is for. Either "cases", "deaths", "recovered", or "all".
+        other_data_types (list of str, optional): Other data types for which the daily change isn't calculated, and which should be unchanged by the function.
 
         Returns:
         None
@@ -449,6 +491,9 @@ class TestSelectors:
                 raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', or 'recovered'.")
 
             daily = cod.calc_daily_change(df, data_types)
+
+            for other_data_type in other_data_types:
+                assert daily[other_data_type].equals(df[other_data_type])
 
             # Run basic table checks
             _check_gotten(daily, format)
