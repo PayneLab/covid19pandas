@@ -544,7 +544,7 @@ class TestSelectors:
 
         # Call the function
         min_count = 100
-        ct = cod.calc_days_since_min_count(df, data_type, min_count=min_count, group_by=group_cols)
+        ct = cod.calc_days_since_min_count(df, data_type, region_group_cols=group_cols, min_count=min_count)
 
         # Run basic table checks
         _check_gotten(ct, format="long") # The calc_days_since_min_count function only outputs table in long format, even if given wide format as input

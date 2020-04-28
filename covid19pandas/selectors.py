@@ -296,21 +296,21 @@ def calc_daily_change(data, data_types):
     return data
 
 
-def calc_days_since_min_count(data, data_type, min_count, group_by):
+def calc_days_since_min_count(data, data_type, region_group_cols, min_count):
     """Create a column where the value for each row is the number of days since the country/region in that row had a particular count of a data type, e.g. cases, deaths, or recoveries. You can then index by this column to compare how different countries were doing after similar amounts of time from first having infections.
 
     Parameters:
     data (pandas.DataFrame): The dataframe to do the calculation for.
     data_type (str): The data type you want the days since the minimum count of. If other data types are present in the table, they will also be kept for days that pass the cutoff in this data type.
+    region_group_cols (str or list of str): The column(s) that uniquely identify each region for each day.
     min_count (int): The minimum count for your data type at which you want to start counting from for each country/region.
-    group_by (str or list of str): The column(s) that uniquely identify each region for each day.
     
     Returns:
     pandas.DataFrame: The original table, with days since the xth case/death/recovery. Note: This function only outputs data in long format tables, since wide format tables would be messy with this transformation.
     """
     date_col = "date"
-    if isinstance(group_by, str): 
-        group_by = [group_by]
+    if isinstance(region_group_cols, str): 
+        region_group_cols = [region_group_cols]
 
     # If they give us a wide format table, convert it to long format.
     if "date" not in data.columns:
@@ -320,15 +320,15 @@ def calc_days_since_min_count(data, data_type, min_count, group_by):
     data = data[data[data_type] >= min_count] 
 
     # Check no duplicate dates in each group
-    if data.duplicated(subset=[date_col] + group_by).any():
+    if data.duplicated(subset=[date_col] + region_group_cols).any():
         raise ParameterError("The combination of grouping columns you passed does not uniquely identify each row for each day. Either pass a different set of grouping columns, or aggregate the counts for each combination of day and grouping columns before using this function.")
 
     # Duplicate grouping cols, since they'll be lost when used for grouping
-    for group_col in group_by:
+    for group_col in region_group_cols:
         data = data.assign(**{group_col + "_group": data[group_col]})
 
     # Add the suffix to the group_cols list, so we group by (and lose) the duplicated columns
-    suffix_group_cols = [col + "_group" for col in group_by]
+    suffix_group_cols = [col + "_group" for col in region_group_cols]
 
     # Duplicate the date col so we can keep the original dates if desired
     days_since_col = f"days_since_{min_count}_{data_type}"
@@ -352,6 +352,6 @@ def calc_days_since_min_count(data, data_type, min_count, group_by):
     data = data.reset_index()
 
     # Sort the table
-    data = data.sort_values(by=[date_col] + group_by)
+    data = data.sort_values(by=[date_col] + region_group_cols)
 
     return data
