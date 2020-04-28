@@ -417,9 +417,6 @@ class TestSelectors:
                 for out in dfs.values():
                     assert out[other_input].equals(df[other_input])
 
-        for out in dfs.values():
-            print(out)
-
     @staticmethod
     def _check_daily_change(df, format, data_type, other_data_types=[]):
         """Verifies that when df is passed to calc_daily_change, the daily count columns generated are correct.
