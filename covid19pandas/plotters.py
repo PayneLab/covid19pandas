@@ -21,28 +21,44 @@ import datetime
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from .download import download_github_file
-from .exceptions import ParameterError
+def plot_lines(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None, legend_title=None, y_logscale=False, dimensions=(11, 8.5), seaborn_style="darkgrid"):
+    """Plot the values in x_col versus the values in y_col, divided into different lines based on the values in group_col.
 
-# Line plot with possible multiple lines
-def line_plot(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None, legend_title=None, y_logscale=False, dimensions=(15, 8), seaborn_style="darkgrid"):
+    Parameters:
+    data (pandas.DataFrame): A dataframe with the data to plot. Must be in "long" format.
+    x_col (str): The name of the column with the x values in it.
+    y_col (str): The name of the column with the y values in it.
+    group_col (str): The name of the column with the grouping values in it.
+    x_lab (str, optional): Label for the x axis. Default None will use the x_col name.
+    y_lab (str, optional): Label for the y axis. Default None will use the y_col name.
+    title (str, optional): Title for the plot. Default None will cause one to be automatically generated based on column names.
+    legend_title (str, optional): Title for the legend. Default None will use the group_col string.
+    y_logscale (bool, optional): Whether to use a log scale for the y axis. If True, will automatically note it on the y axis label and plot title. Default False.
+    dimensions (2-tuple of int or float, optional): Tuple to be passed to the figsize parameter of the matplotlib.pyplot.subplots function. Default (11, 8.5).
+    seaborn_style (string, optional): String to pass to the seaborn.set_style function. Must be "darkgrid", "whitegrid", "dark", "white", or "ticks". Default "darkgrid".
+
+    Returns:
+    matplotlib.figure.Figure: The figure object created for the plot.
+    matplotlib.axes._subplots.AxesSubplot: The single axes object on the figure.
+    """
 
     # Set plot colors and dimensions
     sns.set_style(seaborn_style)
     fig, ax = plt.subplots(figsize=dimensions)
 
     # Create the plot
-    sns.lineplot(x=x_col,
-                y=y_col,
-                data=data,
-                hue=group_col,
-                ax=ax)
+    sns.lineplot(
+        x=x_col,
+        y=y_col,
+        data=data,
+        hue=group_col,
+        ax=ax)
 
     # Set y log scale if desired
     if y_logscale:
         ax.set(yscale="log") 
 
-    # If they specified an x axis label, set it. Otherwise will just default to x_col name.
+    # If they specified an x axis label, set it. Otherwise it will automatically default to x_col name.
     if x_lab is not None:
         ax.set(xlabel=x_lab)
 
@@ -60,7 +76,7 @@ def line_plot(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None,
     if title is None:
         title = f"{x_col} vs {y_col}"
 
-    # If they wanted the y axis on a log scale, note that on the plot title
+    # If we put the y axis on a log scale, note that on the plot title
     if y_logscale:
         title = title + " (y axis log scale)"
 
@@ -72,35 +88,56 @@ def line_plot(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None,
         legend_title = group_col
 
     # Set the legend title.
-    # Because Seaborn doesn't use the actual title property for its default legend title 
-    # and instead just hacks one of the legend labels, we have to re-create the legend, 
-    # excluding that first label, in order to set the title font size.
+    # Because Seaborn doesn't use the actual title property for its default legend title and instead just hacks one of the legend 
+    # labels, we have to re-create the legend, excluding that first label, in order to set the title font size.
 
     handles, labels = ax.get_legend_handles_labels() # Get the handles and labels from the default legend Seaborn creates
-    ax.legend(handles=handles[1:], labels=labels[1:], title="yatahey", title_fontsize="15") # Re-make the legend, excluding the first label and its handle that they hacked for the legend title
+    ax.legend(handles=handles[1:], labels=labels[1:], title=legend_title, title_fontsize="14") # Re-make the legend, excluding the first label and its handle that they hacked for the legend title
 
     return fig, ax
 
-# Line plot with two lines and scaled axes
-def line_plot_two_y(data, x_col, y1_col, y2_col, x_lab=None, y1_lab=None, y2_lab=None, title=None, legend_title=None, y_logscale=False, dimensions=(15, 8), seaborn_style="darkgrid", legend_loc="best"):
+def plot_lines_two_y(data, x_col, y1_col, y2_col, x_lab=None, y1_lab=None, y2_lab=None, title=None, legend_title=None, legend_loc="best", y_logscale=False, dimensions=(11, 8.5), seaborn_style="darkgrid"):
+    """Plot the values in x_col versus the values in y1_col on the left y axis, and the values in y2_col on the right y axis.
+
+    Parameters:
+    data (pandas.DataFrame): A dataframe with the data to plot. Must be in "long" format.
+    x_col (str): The name of the column with the x values in it.
+    y1_col (str): The name of the column with the y values to plot on the left y axis.
+    y2_col (str): The name of the column with the y values to plot on the right y axis.
+    x_lab (str, optional): Label for the x axis. Default None will use the x_col name.
+    y1_lab (str, optional): Label for the left y axis. Default None will use the y1_col name.
+    y2_lab (str, optional): Label for the right y axis. Default None will use the y2_col name.
+    title (str, optional): Title for the plot. Default None will cause one to be automatically generated based on column names.
+    legend_title (str, optional): Title for the legend. Default None will have no title on the legend.
+    legend_loc (str or int or 2-tuple of floats, optional): Legend position specifier, passed directly to the matplotlib.axes.Axes.legend function. See loc parameter details at <https://matplotlib.org/3.2.1/api/_as_gen/matplotlib.axes.Axes.legend.html#matplotlib.axes.Axes.legend> for options. Examples are "best", "center right", "upper left", "lower center". Default "best" optimizes position based on position of line on right y axis.
+    y_logscale (bool, optional): Whether to use a log scale for the y axis. If True, will automatically note it on the y axis label and plot title. Default False.
+    dimensions (2-tuple of int or float, optional): Tuple to be passed to the figsize parameter of the matplotlib.pyplot.subplots function. Default (11, 8.5).
+    seaborn_style (string, optional): String to pass to the seaborn.set_style function. Must be "darkgrid", "whitegrid", "dark", "white", or "ticks". Default "darkgrid".
+
+    Returns:
+    matplotlib.figure.Figure: The figure object created for the plot.
+    2-tuple of matplotlib.axes._subplots.AxesSubplot: The two axes objects on the figure. First corresponds to the left y axis, and second corresponds to the right y axis.
+    """
 
     # Set plot colors and dimensions
     sns.set_style(seaborn_style)
     fig, ax1 = plt.subplots(figsize=dimensions)
 
     # Create the plot
-    sns.lineplot(x=x_col,
-                y=y1_col,
-                data=data,
-                ax=ax1,
-                color="b")
+    sns.lineplot(
+        x=x_col,
+        y=y1_col,
+        data=data,
+        ax=ax1,
+        color="b")
     
     ax2 = ax1.twinx()
-    sns.lineplot(x=x_col,
-                y=y2_col,
-                data=data,
-                ax=ax2,
-                color="g")
+    sns.lineplot(
+        x=x_col,
+        y=y2_col,
+        data=data,
+        ax=ax2,
+        color="g")
     
     # Set y log scale if desired
     if y_logscale:
@@ -143,10 +180,10 @@ def line_plot_two_y(data, x_col, y1_col, y2_col, x_lab=None, y1_lab=None, y2_lab
     # Create the legend
     lines = ax1.get_lines() + ax2.get_lines()
     labels = [y1_col, y2_col]
-    leg = ax2.legend(lines, labels, loc=legend_loc)
+    leg = ax2.legend(lines, labels, loc=legend_loc, title_fontsize="14")
 
     # If they specified a legend title, set it. Otherwise it won't have one.
     if legend_title is not None:
-        ax2.legend().set_title(legend_title)
-    
+        leg.set_title(legend_title)
+
     return fig, (ax1, ax2)
