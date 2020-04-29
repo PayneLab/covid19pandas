@@ -17,7 +17,48 @@ import pandas as pd
 import os
 import warnings
 import datetime
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 from .download import download_github_file
-from .exceptions import *
+from .exceptions import ParameterError
 
 
+# Line plot with possible multiple lines
+def line_plot(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None, y_logscale=False, dimensions=(15, 8), seaborn_style="darkgrid"):
+
+    # Set plot colors and dimensions
+    sns.set_style(seaborn_style)
+    plt.figure(figsize=dimensions)
+
+    # Create the plot
+    ax = sns.lineplot(x=x_col, 
+                y=y_col, 
+                data=data,
+                hue=group_col)
+
+    # Auto-generate labels if not provided
+    if x_lab is None:
+        x_lab = x_col
+
+    if y_lab is None:
+        y_lab = y_col
+
+    if y_logscale:
+        y_lab = y_lab + " (log scale)"
+
+    if title is None:
+        title = f"{x_lab} vs. {y_lab}"
+
+    # Set labels
+    ax.set(title=title,
+          xlabel=x_lab,
+          ylabel=y_lab)
+        
+    # Set y log scale if desired
+    if y_logscale:
+        ax.set(yscale="log")
+
+    plt.show()
+
+# Line plot with two lines and scaled axes
