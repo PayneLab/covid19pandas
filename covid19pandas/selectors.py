@@ -216,7 +216,7 @@ def calc_x_day_rolling_mean(data, data_types, x, center=True):
     for data_type in data_types:
         means = data_date_idx.groupby(id_cols)[data_type].rolling(window=x, min_periods=1, center=center).mean()
 
-        col_name = f"{data_type}_mean"
+        col_name = f"mean_{data_type}"
         means.name = col_name
         means_cols.append(col_name)
 
