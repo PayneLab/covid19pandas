@@ -216,6 +216,7 @@ def calc_x_day_rolling_mean(data, data_types, x, center=True):
     for data_type in data_types:
         means = data_date_idx.groupby(id_cols)[data_type].rolling(window=x, min_periods=1, center=center).mean()
 
+        # Note that we follow the standard of adding the transformation descriptor ("mean_" in this case) to the beginning of the column name so that when we compose different calc functions, the order of composition is apparent.
         col_name = f"mean_{data_type}"
         means.name = col_name
         means_cols.append(col_name)
@@ -308,6 +309,7 @@ def calc_daily_change(data, data_types):
             suffix_group_cols = [col + "_group" for col in group_cols]
 
             # Duplicate the count col so we can keep the cumulative counts
+            # Note that we follow the standard of adding the transformation descriptor ("daily_" in this case) to the beginning of the column name so that when we compose different calc functions, the order of composition is apparent.
             daily_col = "daily_" + data_type
             data = data.assign(**{daily_col: data[data_type]})
 
