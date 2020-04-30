@@ -5,7 +5,7 @@ We provide this resource because it is important for anyone to be able to easily
 
 For some great insights on problems that exist with COVID-19 data, as well as other things to consider when working with these data, read [this article.](https://www.tableau.com/about/blog/2020/3/ten-considerations-you-create-another-chart-about-covid-19)
 
-### Install
+### Installation
 Install the package via pip: `pip install covid19pandas`
 
 ### Usage
@@ -13,7 +13,7 @@ After importing the package, you can quickly access data with a simple function 
 
 ![Data loading demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_basic_table.png)
 
-<br/>
+### Tutorials
 Our [tutorials](https://github.com/PayneLab/covid19pandas/tree/master/docs) show you how to create plots like the one below. Using our built-in functions, you can create many plot types in just two to five function calls.
 
 ![Plot_demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_twinx_plot.png)
