@@ -131,7 +131,7 @@ def select_regions(data, region_col, regions, combine_subregions=False, data_col
         data_cols = [data_cols]
 
     # Select the data
-    data = data[data[region_col].isin(regions)]
+    data = data[data[region_col].isin(regions)].copy()
 
     # Aggregate, if desired
     if combine_subregions:
