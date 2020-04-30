@@ -521,15 +521,28 @@ class TestSelectors:
         else:
             raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', 'recovered', or 'all'.")
 
+        # Decide on our region_cols
+        # Search for defined region cols (based on data source)
+        if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
+            region_cols = ["Country/Region", "Province/State"]
+        elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
+            region_cols = ["Province_State", "Admin2"]
+        elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
+            region_cols = ["county", "state"]
+        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
+            region_cols = ["state"]
+        else:
+            raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
+
         mean_range = 3
         dfs = {
-            "centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, x=mean_range, center=True),
-            "not_centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, x=mean_range, center=False),
+            "centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, region_cols=region_cols, x=mean_range, center=True),
+            "not_centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, region_cols=region_cols, x=mean_range, center=False),
         }
 
         # Run basic table checks
         for name, out in dfs.items():
-            _check_gotten(out, format)
+            _check_gotten(out, format, group_cols=region_cols)
 
         # Check that data_types got averaged
         for out in dfs.values():
@@ -580,7 +593,7 @@ class TestSelectors:
             else:
                 raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', or 'recovered'.")
 
-            daily = cod.calc_daily_change(df, data_types)
+            daily = cod.calc_daily_change(df, data_types, region_cols=group_cols)
 
             for other_data_type in other_data_types:
                 assert daily[other_data_type].equals(df[other_data_type])

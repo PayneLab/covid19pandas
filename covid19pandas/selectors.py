@@ -20,16 +20,15 @@ import warnings
 import datetime
 
 from .exceptions import ParameterError
-from .getters import get_jhu_location_data
 from .utils import _long_to_wide, _wide_to_long, _offset_subtract
 
-def select_top_x_regions(data, region_cols, data_type, x, combine_subregions=True, other_data_cols=[], exclude=[]):
+def select_top_x_regions(data, data_type, region_cols, x, combine_subregions=True, other_data_cols=[], exclude=[]):
     """Select the top x regions with the most cases, deaths, recoveries, or count of another data type.
 
     Parameters:
     data (pandas.DataFrame): The dataframe from which to select data.
-    region_cols (str or list of str): The name(s) of the column(s) that contain the region designations you want to group by.
     data_type (str): The data type you want to rank regions by, e.g. "cases", "deaths", or "recovered". Or a different column name if you like.
+    region_cols (str or list of str): The name(s) of the column(s) that contain the region designations you want to group by.
     x (int): The number of top regions to keep.
     combine_subregions (bool, optional): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Otherwise, keeps the region broken into subregions. Default True.
     other_data_cols (list of str, optional): A list of other data columns in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. This parameter has no effect if combine_subregions is False. Default empty list.
@@ -164,12 +163,13 @@ def select_regions(data, region_col, regions, combine_subregions=False, data_col
 
     return data
 
-def calc_x_day_rolling_mean(data, data_types, x, center=True):
+def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=True):
     """Calculate a centered rolling mean with x days for each number in a count.
 
     Parameters:
     data (pandas.DataFrame): The data to calculate the rolling means for.
-    data_types (str or list of str): The data columns in your table that you want to calculate the x day rolling means for. If you pass a wide format table, this parameter is meaningless since the data is obviously just whatever is in the date columns, so you can just pass an empty list for this parameter in that case.
+    data_types (str or list of str): The data columns in your table that you want to calculate the x day rolling means for.
+    region_cols (str or list of str): Column(s) that uniquely identify each region for each day.
     x (int): The number of days to calculate the means over.
     center (bool, optional): Whether to center the window on each value. Default True.
 
@@ -181,17 +181,8 @@ def calc_x_day_rolling_mean(data, data_types, x, center=True):
     if isinstance(data_types, str):
         data_types = [data_types]
 
-    # Search for defined location id cols (based on data source and region)
-    jhu = False
-    if {"Combined_Key"}.issubset(data.columns): # JHU table
-        id_cols = ["Combined_Key"]
-        jhu = True
-    elif {"county", "state"}.issubset(data.columns): # NYT USA state and county table
-        id_cols = ["county", "state"]
-    elif {"state"}.issubset(data.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not the state/county table.
-        id_cols = ["state"]
-    else:
-        raise ParameterError("The dataframe you passed does not contain any of the standard location identification columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{data.columns}")
+    if isinstance(region_cols, str):
+        region_cols = [region_cols]
 
     # Deal with wide format tables
     wide = False
@@ -200,62 +191,50 @@ def calc_x_day_rolling_mean(data, data_types, x, center=True):
         data = _wide_to_long(data, "generic_data_type") # We use generic because if it's a wide table, we know there's only one data type, but we don't know what it is
         data_types = ["generic_data_type"]
 
+    # Check that the provided region_cols uniquely identify each row for each date
+    if data.duplicated(subset=["date"] + region_cols).any():
+        raise ParameterError(f"The region_cols you passed do not uniquely identify each row for each day. You passed {region_cols}.")
+
     # Make sure that the data_types columns all exist
     not_in = [col for col in data_types if not col in data.columns]
     if len(not_in) > 0:
         raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_types parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
 
     # Fill NaNs in the grouping columns, so they don't get messed up in groupby or join operations
-    for id_col in id_cols:
-        data[id_col] = data[id_col].fillna("n/a")
+    for region_col in region_cols:
+        data[region_col] = data[region_col].fillna("n/a")
 
     # For each data_type, group by the id cols and calculate a rolling mean with a window x days wide, then join back into the original table
     data_date_idx = data.set_index("date") # So that the groupby and rolling calculations will work properly
     means_cols = []
 
     for data_type in data_types:
-        means = data_date_idx.groupby(id_cols)[data_type].rolling(window=x, min_periods=1, center=center).mean()
+        means = data_date_idx.groupby(region_cols)[data_type].rolling(window=x, min_periods=1, center=center).mean()
 
         # Note that we follow the standard of adding the transformation descriptor ("mean_" in this case) to the beginning of the column name so that when we compose different calc functions, the order of composition is apparent.
         col_name = f"mean_{data_type}"
         means.name = col_name
         means_cols.append(col_name)
 
-        data = data.join(means, on=id_cols + ["date"])
+        data = data.join(means, on=region_cols + ["date"])
 
     # Put the NaNs back in
-    for id_col in id_cols:
-        data[id_col] = data[id_col].replace(to_replace="n/a", value=np.nan)
+    for region_col in region_cols:
+        data[region_col] = data[region_col].replace(to_replace="n/a", value=np.nan)
 
     if wide:
-
-        # Convert back
-        meaned_cols_keep = ["date"] + id_cols + means_cols
-        data = data[meaned_cols_keep]
-        data = data.drop_duplicates(keep="first")
-
-        if jhu: # Join back in the location columns
-
-            data = data.set_index(id_cols)
-            loc_table = get_jhu_location_data(update=False) # That way it will match whatever it was when they last downloaded the JHU data, because loading JHU data automatically loads the location table.
-            data = loc_table.merge(data, on=id_cols, how="right", suffixes=(False, False), validate="one_to_many")
-
-            # If it's the global table, drop the FIPS and Admin2 columns--they're only relevant for the US table
-            cols_to_check = ["FIPS", "Admin2"]
-            for col in cols_to_check:
-                if data[col].isnull().all():
-                    data = data.drop(columns=col)
-
+        data = data.drop(columns="generic_data_type")
         data = _long_to_wide(data, data_type=means_cols[0])
 
     return data
 
-def calc_daily_change(data, data_types):
+def calc_daily_change(data, data_types, region_cols):
     """Get the daily change for a cumulative count within each region. Original cumulative counts are not dropped.
     
     Parameters:
     data (pandas.DataFrame): The cumulative counts from which to calculate the daily change.
     data_type (str or list of str): The column(s) you want to calculate the daily change for. Other columns will be left unchanged.
+    region_cols (str or list of str): Column(s) that uniquely identify each region for each day.
     
     Returns:
     pandas.DataFrame: The same table, but with daily change in counts. The column is named "'daily_' + data_type" for each data type.
@@ -268,15 +247,17 @@ def calc_daily_change(data, data_types):
     if isinstance(data_types, str):
         data_types = [data_types]
 
-    # Search for defined grouping cols (based on data source and region)
-    if {"Combined_Key"}.issubset(data.columns): # JHU table
-        group_cols = ["Combined_Key"]
-    elif {"county", "state"}.issubset(data.columns): # NYT USA state and county table
-        group_cols = ["county", "state"]
-    elif {"state"}.issubset(data.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not the state/county table.
-        group_cols = ["state"]
-    else:
-        raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{data.columns}")
+    if isinstance(region_cols, str):
+        region_cols = [region_cols]
+
+    # Check that the provided region_cols uniquely identify each row for each date
+    if wide:
+        unique_groups = region_cols
+    else: # long format table
+        unique_groups = ["date"] + region_cols
+
+    if data.duplicated(subset=unique_groups).any():
+        raise ParameterError(f"The region_cols you passed do not uniquely identify each row for each day. You passed {region_cols}.")
 
     if wide:
         if not data.columns.map(lambda x: issubclass(type(x), datetime.date)).any():
@@ -302,11 +283,11 @@ def calc_daily_change(data, data_types):
                 raise ParameterError(f"There is no '{data_type}' column in the dataframe you passed. Existing columns: \n{data.columns}")
 
             # Duplicate grouping cols, since they'll be lost when used for grouping
-            for group_col in group_cols:
-                data = data.assign(**{group_col + "_group": data[group_col]})
+            for region_col in region_cols:
+                data = data.assign(**{region_col + "_group": data[region_col]})
 
-            # Add the suffix to the group_cols list, so we group by (and lose) the duplicated columns
-            suffix_group_cols = [col + "_group" for col in group_cols]
+            # Add the suffix to the region_cols list, so we group by (and lose) the duplicated columns
+            suffix_region_cols = [col + "_group" for col in region_cols]
 
             # Duplicate the count col so we can keep the cumulative counts
             # Note that we follow the standard of adding the transformation descriptor ("daily_" in this case) to the beginning of the column name so that when we compose different calc functions, the order of composition is apparent.
@@ -314,14 +295,14 @@ def calc_daily_change(data, data_types):
             data = data.assign(**{daily_col: data[data_type]})
 
             # Put all columns besides the duplicates we created into the index, so they aren't affected by the groupby
-            id_cols = data.columns[~data.columns.isin(suffix_group_cols + [daily_col])].tolist()
+            id_cols = data.columns[~data.columns.isin(suffix_region_cols + [daily_col])].tolist()
             data = data.set_index(id_cols)
 
             # Fill NaNs in grouping cols (fillna excludes index)
             data = data.fillna("n/a")
 
             # Group by location and calculate daily counts with our helper function _offset_subtract
-            data = data.groupby(suffix_group_cols).transform(_offset_subtract)
+            data = data.groupby(suffix_region_cols).transform(_offset_subtract)
 
             # Put back in any remaining NaNs
             data = data.replace(to_replace="n/a", value=np.nan)
@@ -332,21 +313,21 @@ def calc_daily_change(data, data_types):
     return data
 
 
-def calc_days_since_min_count(data, data_type, region_group_cols, min_count):
+def calc_days_since_min_count(data, data_type, region_cols, min_count):
     """Create a column where the value for each row is the number of days since the country/region in that row had a particular count of a data type, e.g. cases, deaths, or recoveries. You can then index by this column to compare how different countries were doing after similar amounts of time from first having infections.
 
     Parameters:
     data (pandas.DataFrame): The dataframe to do the calculation for.
     data_type (str): The data type you want the days since the minimum count of. If other data types are present in the table, they will also be kept for days that pass the cutoff in this data type.
-    region_group_cols (str or list of str): The column(s) that uniquely identify each region for each day.
+    region_cols (str or list of str): Column(s) that uniquely identify each region for each day.
     min_count (int): The minimum count for your data type at which you want to start counting from for each country/region.
     
     Returns:
     pandas.DataFrame: The original table, with days since the xth case/death/recovery. Note: This function only outputs data in long format tables, since wide format tables would be messy with this transformation.
     """
     date_col = "date"
-    if isinstance(region_group_cols, str): 
-        region_group_cols = [region_group_cols]
+    if isinstance(region_cols, str): 
+        region_cols = [region_cols]
 
     # If they give us a wide format table, convert it to long format.
     if "date" not in data.columns:
@@ -356,15 +337,15 @@ def calc_days_since_min_count(data, data_type, region_group_cols, min_count):
     data = data[data[data_type] >= min_count] 
 
     # Check no duplicate dates in each group
-    if data.duplicated(subset=[date_col] + region_group_cols).any():
+    if data.duplicated(subset=[date_col] + region_cols).any():
         raise ParameterError("The combination of grouping columns you passed does not uniquely identify each row for each day. Either pass a different set of grouping columns, or aggregate the counts for each combination of day and grouping columns before using this function.")
 
     # Duplicate grouping cols, since they'll be lost when used for grouping
-    for group_col in region_group_cols:
-        data = data.assign(**{group_col + "_group": data[group_col]})
+    for region_col in region_cols:
+        data = data.assign(**{region_col + "_group": data[region_col]})
 
     # Add the suffix to the group_cols list, so we group by (and lose) the duplicated columns
-    suffix_group_cols = [col + "_group" for col in region_group_cols]
+    suffix_group_cols = [col + "_group" for col in region_cols]
 
     # Duplicate the date col so we can keep the original dates if desired
     days_since_col = f"days_since_{min_count}_{data_type}"
@@ -388,6 +369,6 @@ def calc_days_since_min_count(data, data_type, region_group_cols, min_count):
     data = data.reset_index()
 
     # Sort the table
-    data = data.sort_values(by=[date_col] + region_group_cols)
+    data = data.sort_values(by=[date_col] + region_cols)
 
     return data

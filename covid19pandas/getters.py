@@ -148,12 +148,13 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
 
         df = all_df
 
-    # Get the location data and join it in
+    # Get the location data to join in
     loc_table = get_jhu_location_data(update=update)
     if region == "global":
         loc_table = loc_table.rename(columns={"Country_Region": "Country/Region", "Province_State": "Province/State"})
         loc_table = loc_table[pd.isnull(loc_table["Admin2"])] # Drop location data for individual US counties--we only want state level data, to avoid duplicate rows
 
+    # Merge in the location data
     df = loc_table.merge(df, on=id_cols, how="right", suffixes=(False, False), validate="one_to_many")
 
     # If it's the global table, drop the FIPS and Admin2 columns--they're only relevant for the US table
@@ -280,8 +281,16 @@ def _get_table(base_url, file_name, source, update):
         df.columns = df.columns.map(lambda x: pd.to_datetime(x, errors="ignore"))
         df = df.replace(to_replace="Taiwan*", value="Taiwan", regex=False)
         df = df.rename(columns={"Long_": "Long"}, errors="ignore")
+
         if "Province/State" in df.columns and "Country/Region" in df.columns:
             df = df[~((df["Province/State"] == "Recovered") & (df["Country/Region"] == "Canada"))]
+
+        if "Admin2" in df.columns:
+            df = df[~(df["Combined_Key"] == "Southwest, Utah, US")] # This column is a typo, and has all zeros
+
+        if "Combined_Key" in df.columns:
+            df["Combined_Key"] = df["Combined_Key"].str.replace(" ", "") # Spacing isn't consistent for this columns, so we'll nix all spaces
+
 
     if source == "nyt":
         df = df.astype({"date": 'datetime64'})
