@@ -13,6 +13,7 @@ import covid19pandas as cod
 import covid19pandas.exceptions as codex
 
 import pytest
+import pandas as pd
 import numpy as np
 import datetime
 
@@ -87,7 +88,7 @@ class TestGetters:
         assert df.shape[0] > 0 and df.shape[1] > 0
 
 # Help functions
-def _check_gotten(df, format, group_cols=None):
+def _check_gotten(df, format, group_cols=None, allow_negs=False):
     """Standard checks to verify integrity of gotten table."""
 
     # Check dimensions
@@ -107,6 +108,12 @@ def _check_gotten(df, format, group_cols=None):
         if format == "long":
             group_cols = ["date"] + group_cols
 
+        if "UID" in df.columns:
+            if format == "long":
+                assert not df.duplicated(subset=["date", "UID"]).any()
+            else:
+                assert not df.duplicated(subset="UID").any()
+
     # Check that there aren't duplicates
     assert not df.duplicated(subset=group_cols).any()
 
@@ -115,3 +122,9 @@ def _check_gotten(df, format, group_cols=None):
         assert df["date"].dtype == np.dtype('datetime64[ns]')
     elif format == "wide":
         assert df.columns.map(lambda x: issubclass(type(x), datetime.date)).any()
+
+    if not allow_negs:
+        # Check that there aren't negative counts
+        for col in df.columns[~df.columns.isin(["Lat", "Long"])]:
+            if np.issubdtype(df[col].dtype, np.number):
+                assert not (df[col] < 0).any()

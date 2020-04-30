@@ -541,14 +541,18 @@ class TestSelectors:
         }
 
         # Run basic table checks
+        if format == "long":
+            unique_cols = ["date"] + region_cols
+        else: # format == "wide"
+            unique_cols = region_cols
         for name, out in dfs.items():
-            _check_gotten(out, format, group_cols=region_cols)
+            _check_gotten(out, format, group_cols=unique_cols)
 
         # Check that data_types got averaged
         for out in dfs.values():
             for data_type in data_types:
                 if format == "long":
-                    assert f"{data_type}_mean" in out.columns
+                    assert f"mean_{data_type}" in out.columns
                 else: # format == "wide"
                     assert not df.equals(out)
 
@@ -599,7 +603,7 @@ class TestSelectors:
                 assert daily[other_data_type].equals(df[other_data_type])
 
             # Run basic table checks
-            _check_gotten(daily, format)
+            _check_gotten(daily, format, allow_negs=True)
 
             # Check that no columns were lost
             assert df.columns.isin(daily.columns).all()
@@ -642,10 +646,10 @@ class TestSelectors:
                     raise Exception(f"Unexpected length of group_cols: '{len(group_cols)}'. group_cols:\n{group_cols}")
 
         elif format == "wide":
-            daily = cod.calc_daily_change(df, data_type)
+            daily = cod.calc_daily_change(df, data_type, region_cols=group_cols)
 
             # Run basic table checks
-            _check_gotten(daily, format)
+            _check_gotten(daily, format, allow_negs=True)
 
             date_cols = [col for col in df.columns if issubclass(type(col), datetime.date)]
 
@@ -685,7 +689,7 @@ class TestSelectors:
 
         # Call the function
         min_count = 100
-        ct = cod.calc_days_since_min_count(df, data_type, region_group_cols=group_cols, min_count=min_count)
+        ct = cod.calc_days_since_min_count(df, data_type, region_cols=group_cols, min_count=min_count)
 
         # Run basic table checks
         _check_gotten(ct, format="long") # The calc_days_since_min_count function only outputs table in long format, even if given wide format as input

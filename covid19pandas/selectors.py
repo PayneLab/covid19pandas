@@ -118,7 +118,7 @@ def select_regions(data, region_col, regions, combine_subregions=False, data_col
     data (pandas.DataFrame): The dataframe from which to select data.
     region_col (str): The name of the column that contains the region designation you're specifying by. E.g., if you want to select particular states, pass the name of the state column
     regions (str or list of str): The regions to select.
-    combine_subregions (bool): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Default True. Otherwise, keeps the regions broken into subregions. 
+    combine_subregions (bool): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Default False.
     data_cols (str or list of str, optional): Only required when passing long format tables and combine_subregions is True. These are the data column(s) in the table that you want to be summed for each region group instead of dropped, if combine_subregions is True. Default is an empty list.
 
     Returns:

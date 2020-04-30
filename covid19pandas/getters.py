@@ -289,7 +289,7 @@ def _get_table(base_url, file_name, source, update):
             df = df[~(df["Combined_Key"] == "Southwest, Utah, US")] # This column is a typo, and has all zeros
 
         if "Combined_Key" in df.columns:
-            df["Combined_Key"] = df["Combined_Key"].str.replace(" ", "") # Spacing isn't consistent for this columns, so we'll nix all spaces
+            df["Combined_Key"] = df["Combined_Key"].str.replace(" ", "") # Spacing isn't consistent for this column, so we'll nix all spaces
 
 
     if source == "nyt":
