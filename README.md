@@ -15,6 +15,7 @@ After importing the package, you can quickly access data with a simple function 
 
 ![Data loading demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_basic_table.png)
 
+
 Our [tutorials](https://github.com/PayneLab/covid19pandas/tree/master/docs) show you how to create plots like the one below. Using our built-in functions, you can create many plot types in just two to five function calls.
 
 ![Plot_demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_twinx_plot.png)
