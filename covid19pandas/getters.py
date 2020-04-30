@@ -23,35 +23,6 @@ from .download import download_github_file
 from .exceptions import FileDoesNotExistError, NoInternetError, ParameterError, DeprecatedWarning, FileNotUpdatedWarning
 from .utils import _wide_to_long, _long_to_wide
 
-# Old getters
-def get_cases():
-    """***DEPRECATED - Use get_data_jhu instead.***
-    Get most recent case counts from JHU."""
-    # Deprecated warning
-    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
-    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
-    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
-    return _get_table(url, "time_series_covid19_confirmed_global.csv", source="jhu", update=True)
-
-def get_deaths():
-    """***DEPRECATED - Use get_data_jhu instead.***
-    Get most recent fatality counts from JHU."""
-    # Deprecated warning
-    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
-    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
-    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
-    return _get_table(url, "time_series_covid19_deaths_global.csv", source="jhu", update=True)
-
-def get_recovered():
-    """***DEPRECATED - Use get_data_jhu instead.***
-    Get most recent recovered counts from JHU."""
-    # Deprecated warning
-    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
-    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
-    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
-    return _get_table(url, "time_series_covid19_recovered_global.csv", source="jhu", update=True)
-
-# New getters
 def get_data_jhu(format="long", data_type="all", region="global", update=True):
     """Get the most current data tables from JHU (https://github.com/CSSEGISandData/COVID-19).
 
@@ -296,3 +267,31 @@ def _get_table(base_url, file_name, source, update):
         df = df.astype({"date": 'datetime64'})
 
     return df
+
+# Deprecated getters
+def get_cases():
+    """***DEPRECATED - Use get_data_jhu instead.***
+    Get most recent case counts from JHU."""
+    # Deprecated warning
+    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
+    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
+    return _get_table(url, "time_series_covid19_confirmed_global.csv", source="jhu", update=True)
+
+def get_deaths():
+    """***DEPRECATED - Use get_data_jhu instead.***
+    Get most recent fatality counts from JHU."""
+    # Deprecated warning
+    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
+    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
+    return _get_table(url, "time_series_covid19_deaths_global.csv", source="jhu", update=True)
+
+def get_recovered():
+    """***DEPRECATED - Use get_data_jhu instead.***
+    Get most recent recovered counts from JHU."""
+    # Deprecated warning
+    url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+    warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
+    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
+    return _get_table(url, "time_series_covid19_recovered_global.csv", source="jhu", update=True)

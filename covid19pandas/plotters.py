@@ -21,7 +21,7 @@ import datetime
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-def plot_lines(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None, legend_title=None, y_logscale=False, dimensions=(11, 8.5), seaborn_style="darkgrid"):
+def plot_lines(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None, legend_title=None, legend_order=None, y_logscale=False, dimensions=(11, 8.5), seaborn_style="darkgrid"):
     """Plot the values in x_col versus the values in y_col, divided into different lines based on the values in group_col.
 
     Parameters:
@@ -33,6 +33,7 @@ def plot_lines(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None
     y_lab (str, optional): Label for the y axis. Default None will use the y_col name.
     title (str, optional): Title for the plot. Default None will cause one to be automatically generated based on column names.
     legend_title (str, optional): Title for the legend. Default None will use the group_col string.
+    legend_order (list of str, optional): A list of the unique values in the group_col column, specifying the order in which you want them to appear on the plot legend. Default None uses order of appearance in the group_col column.
     y_logscale (bool, optional): Whether to use a log scale for the y axis. If True, will automatically note it on the y axis label and plot title. Default False.
     dimensions (2-tuple of int or float, optional): Tuple to be passed to the figsize parameter of the matplotlib.pyplot.subplots function. Default (11, 8.5).
     seaborn_style (string, optional): String to pass to the seaborn.set_style function. Must be "darkgrid", "whitegrid", "dark", "white", or "ticks". Default "darkgrid".
@@ -52,6 +53,7 @@ def plot_lines(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None
         y=y_col,
         data=data,
         hue=group_col,
+        hue_order=legend_order,
         ax=ax)
 
     # Set y log scale if desired
@@ -144,42 +146,31 @@ def plot_lines_two_y(data, x_col, y1_col, y2_col, x_lab=None, y1_lab=None, y2_la
         ax1.set(yscale="log") 
         ax2.set(yscale="log") 
 
-    # If they specified an x axis label, set it. Otherwise will just default to x_col name.
-    if x_lab is not None:
-        ax2.set(xlabel=x_lab)
+    # Generate labels if not provided
+    if x_lab is None:
+        x_lab = x_col
+    if y1_lab is None:
+        y1_lab = y1_col 
+    if y2_lab is None:
+        y2_lab = y2_col 
+    if title is None:
+        title = f"{x_lab} vs {y1_lab} and {y2_lab}"
 
-    # If they wanted the y axis on a log scale, we append that to the y axis label
+    # If they wanted the y axis on a log scale, we append that to the y axis labels and the title
     if y_logscale:
-
-        # Generate y labels if not provided
-        if y1_lab is None:
-            y1_lab = y1_col 
-        if y2_lab is None:
-            y2_lab = y2_col 
-
         y1_lab = y1_lab + " (log scale)"
         y2_lab = y2_lab + " (log scale)"
-
-    # Set the y axes labels if they provided them and/or we added " (log scale)" to the ends. Otherwise, just defaults to y1_col/y2_col name.
-    if y1_lab is not None:
-        ax1.set(ylabel=y1_lab)
-    if y2_lab is not None:
-        ax2.set(ylabel=y2_lab)
-
-    # Generate a default title if none is supplied
-    if title is None:
-        title = f"{x_col} vs {y1_col} and {y2_col}"
-
-    # If they wanted the y axis on a log scale, note that on the plot title
-    if y_logscale:
         title = title + " (y axes log scale)"
 
-    # Set the title
+    # Set the labels
+    ax1.set(xlabel=x_lab)
+    ax1.set(ylabel=y1_lab)
+    ax2.set(ylabel=y2_lab)
     ax2.set(title=title)
 
     # Create the legend
     lines = ax1.get_lines() + ax2.get_lines()
-    labels = [y1_col, y2_col]
+    labels = [y1_lab, y2_lab]
     leg = ax2.legend(lines, labels, loc=legend_loc, title_fontsize="14")
 
     # If they specified a legend title, set it. Otherwise it won't have one.

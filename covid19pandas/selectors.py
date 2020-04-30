@@ -163,7 +163,7 @@ def select_regions(data, region_col, regions, combine_subregions=False, data_col
 
     return data
 
-def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=True):
+def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=False):
     """Calculate a centered rolling mean with x days for each number in a count.
 
     Parameters:
@@ -171,7 +171,7 @@ def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=True):
     data_types (str or list of str): The data columns in your table that you want to calculate the x day rolling means for.
     region_cols (str or list of str): Column(s) that uniquely identify each region for each day.
     x (int): The number of days to calculate the means over.
-    center (bool, optional): Whether to center the window on each value. Default True.
+    center (bool, optional): Whether to center the window on each value, instead of having the value at the right side of the window. Default False.
 
     Returns:
     pandas.DataFrame: The table, with rolling means calculated over the specified number of days.
