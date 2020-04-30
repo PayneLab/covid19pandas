@@ -30,6 +30,8 @@ setup(name='covid19pandas',
 		'numpy>=1.16.3',
 		'pandas>=0.25.1',
 		'requests>=2.21.0',
+		'seaborn>=0.10.0',
+		'matplotlib>=3.1.0',
 	],
     data_files=[
     ],
