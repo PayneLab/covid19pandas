@@ -133,6 +133,10 @@ def select_regions(data, region_col, regions, combine_subregions=False, data_col
     # Select the data
     data = data[data[region_col].isin(regions)].copy()
 
+    # Check that there at least one row matched
+    if data.shape[0] < 1:
+        raise ParameterError(f"No rows in the dataframe have any of the values {regions} in the column '{region_col}'.")
+
     # Aggregate, if desired
     if combine_subregions:
         if "date" in data.columns: # Long format table
