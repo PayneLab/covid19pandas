@@ -61,7 +61,7 @@ class TestSelectors:
                     region_col = "Province_State"
 
                 for plot_type in plot_types:
-                    top_ten = cod.select_top_x_regions(data=df, data_type=plot_type, region_cols=region_col, x=10)
+                    top_ten = cod.select_top_x_regions(data=df, data_col=plot_type, region_cols=region_col, x=10)
                     fig, ax = cod.plot_lines(data=top_ten, x_col="date", y_col=plot_type, group_col=region_col)
                     plt.show()
         
@@ -79,7 +79,7 @@ class TestSelectors:
                 region_col = "state"
 
                 for plot_type in plot_types:
-                    top_ten = cod.select_top_x_regions(data=df, data_type=plot_type, region_cols=region_col, x=10)
+                    top_ten = cod.select_top_x_regions(data=df, data_col=plot_type, region_cols=region_col, x=10)
                     fig, ax = cod.plot_lines(data=top_ten, x_col="date", y_col=plot_type, group_col=region_col)
                     plt.show()
 
@@ -109,7 +109,7 @@ class TestSelectors:
                     
                 for plot_type in plot_types:
                     country_df = cod.select_regions(data=df, region_col=region_col, regions=region, combine_subregions=True, data_cols=plot_type)
-                    with_daily = cod.calc_daily_change(data=country_df, data_types=plot_type, region_cols=region_col)
+                    with_daily = cod.calc_daily_change(data=country_df, data_cols=plot_type, region_cols=region_col)
                     fig, ax = cod.plot_lines_two_y(data=with_daily, x_col="date", y1_col=f"daily_{plot_type}", y2_col=plot_type)
                     plt.show()
         
@@ -129,6 +129,6 @@ class TestSelectors:
 
                 for plot_type in plot_types:
                     country_df = cod.select_regions(data=df, region_col=region_col, regions=region, combine_subregions=True, data_cols=plot_type)
-                    with_daily = cod.calc_daily_change(data=country_df, data_types=plot_type, region_cols=region_col)
+                    with_daily = cod.calc_daily_change(data=country_df, data_cols=plot_type, region_cols=region_col)
                     fig, ax = cod.plot_lines_two_y(data=with_daily, x_col="date", y1_col=f"daily_{plot_type}", y2_col=plot_type)
                     plt.show()

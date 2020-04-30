@@ -280,9 +280,9 @@ class TestSelectors:
             num_top = 10
             # Call the function
             outs = {
-                "top_others_kept": cod.select_top_x_regions(df, region_cols=region_col, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep),
-                "top_uncombined": cod.select_top_x_regions(df, region_cols=region_col, data_type=data_type, x=num_top, combine_subregions=False, other_data_cols=other_to_keep),
-                "top_with_exclusions": cod.select_top_x_regions(df, region_cols=region_col, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep, exclude=exclude),
+                "top_others_kept": cod.select_top_x_regions(df, region_cols=region_col, data_col=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep),
+                "top_uncombined": cod.select_top_x_regions(df, region_cols=region_col, data_col=data_type, x=num_top, combine_subregions=False, other_data_cols=other_to_keep),
+                "top_with_exclusions": cod.select_top_x_regions(df, region_cols=region_col, data_col=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep, exclude=exclude),
             }
 
             # Run basic table checks
@@ -359,9 +359,9 @@ class TestSelectors:
             num_top = 10
             # Call the function
             outs = {
-                "top_others_kept": cod.select_top_x_regions(df, region_cols=region_cols, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep),
-                "top_uncombined": cod.select_top_x_regions(df, region_cols=region_cols, data_type=data_type, x=num_top, combine_subregions=False, other_data_cols=other_to_keep),
-                "top_with_exclusions": cod.select_top_x_regions(df, region_cols=region_cols, data_type=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep, exclude=exclude),
+                "top_others_kept": cod.select_top_x_regions(df, region_cols=region_cols, data_col=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep),
+                "top_uncombined": cod.select_top_x_regions(df, region_cols=region_cols, data_col=data_type, x=num_top, combine_subregions=False, other_data_cols=other_to_keep),
+                "top_with_exclusions": cod.select_top_x_regions(df, region_cols=region_cols, data_col=data_type, x=num_top, combine_subregions=True, other_data_cols=other_to_keep, exclude=exclude),
             }
 
             # Run basic table checks
@@ -536,8 +536,8 @@ class TestSelectors:
 
         mean_range = 3
         dfs = {
-            "centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, region_cols=region_cols, x=mean_range, center=True),
-            "not_centered": cod.calc_x_day_rolling_mean(df, data_types=data_types, region_cols=region_cols, x=mean_range, center=False),
+            "centered": cod.calc_x_day_rolling_mean(df, data_cols=data_types, region_cols=region_cols, x=mean_range, center=True),
+            "not_centered": cod.calc_x_day_rolling_mean(df, data_cols=data_types, region_cols=region_cols, x=mean_range, center=False),
         }
 
         # Run basic table checks

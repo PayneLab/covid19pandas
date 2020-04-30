@@ -22,12 +22,12 @@ import datetime
 from .exceptions import ParameterError
 from .utils import _long_to_wide, _wide_to_long, _offset_subtract
 
-def select_top_x_regions(data, data_type, region_cols, x, combine_subregions=True, other_data_cols=[], exclude=[]):
+def select_top_x_regions(data, data_col, region_cols, x, combine_subregions=True, other_data_cols=[], exclude=[]):
     """Select the top x regions with the most cases, deaths, recoveries, or count of another data type.
 
     Parameters:
     data (pandas.DataFrame): The dataframe from which to select data.
-    data_type (str): The data type you want to rank regions by, e.g. "cases", "deaths", or "recovered". Or a different column name if you like.
+    data_col (str): The data column you want to rank regions by.
     region_cols (str or list of str): The name(s) of the column(s) that contain the region designations you want to group by.
     x (int): The number of top regions to keep.
     combine_subregions (bool, optional): When a particular region has different subregions, whether to sum the daily counts for all those subregions into one count for the region for each day. Otherwise, keeps the region broken into subregions. Default True.
@@ -40,13 +40,13 @@ def select_top_x_regions(data, data_type, region_cols, x, combine_subregions=Tru
 
     # If they give us a wide format table, make a long format copy for determining the top x regions
     if "date" not in data.columns:
-        long_data = _wide_to_long(data, data_type) 
+        long_data = _wide_to_long(data, data_col) 
     else:
         long_data = data.copy()
 
-    # Check that data_type is in the dataframe
-    if data_type not in long_data.columns:
-        raise ParameterError(f"There is no '{data_type}' column in the dataframe you passed. Existing columns: \n{data.columns}")
+    # Check that data_col is in the dataframe
+    if data_col not in long_data.columns:
+        raise ParameterError(f"There is no '{data_col}' column in the dataframe you passed. Existing columns: \n{data.columns}")
 
     # Process string input for region grouping cols
     if isinstance(region_cols, str):
@@ -57,7 +57,7 @@ def select_top_x_regions(data, data_type, region_cols, x, combine_subregions=Tru
     last_day = long_data["date"].max() 
 
     current_ct = long_data[long_data['date'] == last_day] # Pull all records for that day
-    current_ct = long_data[['date', data_type] + region_cols]
+    current_ct = long_data[['date', data_col] + region_cols]
 
     # Select only rows where region_cols values are not in the exclude list
     for region_col in region_cols: 
@@ -71,9 +71,9 @@ def select_top_x_regions(data, data_type, region_cols, x, combine_subregions=Tru
     # Sum all counts for today in subregions within regions. Now we have to totals for all the regions for the most recent day.
     current_ct = current_ct.groupby(region_cols).aggregate(np.sum) 
 
-    # Sort the table by the data_type, then select the last x names--they are the top x regions
-    top_x_names = current_ct.sort_values(by=data_type).tail(x) 
-    top_x_names = top_x_names.drop(columns=data_type) # So that we don't have column overlap when joining with the original data table. So now top_x_names is a dataframe with just an index and no columns, but still joinable
+    # Sort the table by the data_col, then select the last x names--they are the top x regions
+    top_x_names = current_ct.sort_values(by=data_col).tail(x) 
+    top_x_names = top_x_names.drop(columns=data_col) # So that we don't have column overlap when joining with the original data table. So now top_x_names is a dataframe with just an index and no columns, but still joinable
 
     # Select data for the top regions
     data = data.join(top_x_names, on=region_cols, how="inner")
@@ -93,7 +93,7 @@ def select_top_x_regions(data, data_type, region_cols, x, combine_subregions=Tru
             raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the other_data_cols parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
 
         # Drop columns that would be messed up by the groupby
-        cols_to_not_drop = ["date", data_type] + region_cols + other_data_cols
+        cols_to_not_drop = ["date", data_col] + region_cols + other_data_cols
         cols_to_drop = [col for col in data.columns if col not in cols_to_not_drop and not issubclass(type(col), datetime.date)]
         data = data.drop(columns=cols_to_drop)
 
@@ -163,12 +163,12 @@ def select_regions(data, region_col, regions, combine_subregions=False, data_col
 
     return data
 
-def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=False):
+def calc_x_day_rolling_mean(data, data_cols, region_cols, x, center=False):
     """Calculate a centered rolling mean with x days for each number in a count.
 
     Parameters:
     data (pandas.DataFrame): The data to calculate the rolling means for.
-    data_types (str or list of str): The data columns in your table that you want to calculate the x day rolling means for.
+    data_cols (str or list of str): The data columns in your table that you want to calculate the x day rolling means for.
     region_cols (str or list of str): Column(s) that uniquely identify each region for each day.
     x (int): The number of days to calculate the means over.
     center (bool, optional): Whether to center the window on each value, instead of having the value at the right side of the window. Default False.
@@ -178,8 +178,8 @@ def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=False):
     """
 
     # Convert from str to list input if needed
-    if isinstance(data_types, str):
-        data_types = [data_types]
+    if isinstance(data_cols, str):
+        data_cols = [data_cols]
 
     if isinstance(region_cols, str):
         region_cols = [region_cols]
@@ -188,31 +188,31 @@ def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=False):
     wide = False
     if "date" not in data.columns:
         wide = True
-        data = _wide_to_long(data, "generic_data_type") # We use generic because if it's a wide table, we know there's only one data type, but we don't know what it is
-        data_types = ["generic_data_type"]
+        data = _wide_to_long(data, "generic_data_col") # We use generic because if it's a wide table, we know there's only one data type, but we don't know what it is
+        data_cols = ["generic_data_col"]
 
     # Check that the provided region_cols uniquely identify each row for each date
     if data.duplicated(subset=["date"] + region_cols).any():
         raise ParameterError(f"The region_cols you passed do not uniquely identify each row for each day. You passed {region_cols}.")
 
-    # Make sure that the data_types columns all exist
-    not_in = [col for col in data_types if not col in data.columns]
+    # Make sure that the data_cols columns all exist
+    not_in = [col for col in data_cols if not col in data.columns]
     if len(not_in) > 0:
-        raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_types parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
+        raise ParameterError(f"The dataframe you passed does not contain all of the data types you passed to the data_cols parameter. These are the missing columns:\n{not_in}\n\nYour dataframe's columns are:\n{data.columns}")
 
     # Fill NaNs in the grouping columns, so they don't get messed up in groupby or join operations
     for region_col in region_cols:
         data[region_col] = data[region_col].fillna("n/a")
 
-    # For each data_type, group by the id cols and calculate a rolling mean with a window x days wide, then join back into the original table
+    # For each data_col, group by the id cols and calculate a rolling mean with a window x days wide, then join back into the original table
     data_date_idx = data.set_index("date") # So that the groupby and rolling calculations will work properly
     means_cols = []
 
-    for data_type in data_types:
-        means = data_date_idx.groupby(region_cols)[data_type].rolling(window=x, min_periods=1, center=center).mean()
+    for data_col in data_cols:
+        means = data_date_idx.groupby(region_cols)[data_col].rolling(window=x, min_periods=1, center=center).mean()
 
         # Note that we follow the standard of adding the transformation descriptor ("mean_" in this case) to the beginning of the column name so that when we compose different calc functions, the order of composition is apparent.
-        col_name = f"mean_{data_type}"
+        col_name = f"mean_{data_col}"
         means.name = col_name
         means_cols.append(col_name)
 
@@ -223,29 +223,29 @@ def calc_x_day_rolling_mean(data, data_types, region_cols, x, center=False):
         data[region_col] = data[region_col].replace(to_replace="n/a", value=np.nan)
 
     if wide:
-        data = data.drop(columns="generic_data_type")
+        data = data.drop(columns="generic_data_col")
         data = _long_to_wide(data, data_type=means_cols[0])
 
     return data
 
-def calc_daily_change(data, data_types, region_cols):
+def calc_daily_change(data, data_cols, region_cols):
     """Get the daily change for a cumulative count within each region. Original cumulative counts are not dropped.
     
     Parameters:
     data (pandas.DataFrame): The cumulative counts from which to calculate the daily change.
-    data_type (str or list of str): The column(s) you want to calculate the daily change for. Other columns will be left unchanged.
+    data_col (str or list of str): The column(s) you want to calculate the daily change for. Other columns will be left unchanged.
     region_cols (str or list of str): Column(s) that uniquely identify each region for each day.
     
     Returns:
-    pandas.DataFrame: The same table, but with daily change in counts. The column is named "'daily_' + data_type" for each data type.
+    pandas.DataFrame: The same table, but with daily change in counts. The column is named "'daily_' + data_col" for each data type.
     """
     wide = False
     if "date" not in data.columns:
         wide = True
 
     # Convert from str to list input if needed
-    if isinstance(data_types, str):
-        data_types = [data_types]
+    if isinstance(data_cols, str):
+        data_cols = [data_cols]
 
     if isinstance(region_cols, str):
         region_cols = [region_cols]
@@ -277,10 +277,10 @@ def calc_daily_change(data, data_types, region_cols):
         data = new_data
 
     else: # It's a long format table
-        for data_type in data_types:
+        for data_col in data_cols:
 
-            if data_type not in data.columns:
-                raise ParameterError(f"There is no '{data_type}' column in the dataframe you passed. Existing columns: \n{data.columns}")
+            if data_col not in data.columns:
+                raise ParameterError(f"There is no '{data_col}' column in the dataframe you passed. Existing columns: \n{data.columns}")
 
             # Duplicate grouping cols, since they'll be lost when used for grouping
             for region_col in region_cols:
@@ -291,8 +291,8 @@ def calc_daily_change(data, data_types, region_cols):
 
             # Duplicate the count col so we can keep the cumulative counts
             # Note that we follow the standard of adding the transformation descriptor ("daily_" in this case) to the beginning of the column name so that when we compose different calc functions, the order of composition is apparent.
-            daily_col = "daily_" + data_type
-            data = data.assign(**{daily_col: data[data_type]})
+            daily_col = "daily_" + data_col
+            data = data.assign(**{daily_col: data[data_col]})
 
             # Put all columns besides the duplicates we created into the index, so they aren't affected by the groupby
             id_cols = data.columns[~data.columns.isin(suffix_region_cols + [daily_col])].tolist()
@@ -313,12 +313,12 @@ def calc_daily_change(data, data_types, region_cols):
     return data
 
 
-def calc_days_since_min_count(data, data_type, region_cols, min_count):
+def calc_days_since_min_count(data, data_col, region_cols, min_count):
     """Create a column where the value for each row is the number of days since the country/region in that row had a particular count of a data type, e.g. cases, deaths, or recoveries. You can then index by this column to compare how different countries were doing after similar amounts of time from first having infections.
 
     Parameters:
     data (pandas.DataFrame): The dataframe to do the calculation for.
-    data_type (str): The data type you want the days since the minimum count of. If other data types are present in the table, they will also be kept for days that pass the cutoff in this data type.
+    data_col (str): The data type you want the days since the minimum count of. If other data types are present in the table, they will also be kept for days that pass the cutoff in this data type.
     region_cols (str or list of str): Column(s) that uniquely identify each region for each day.
     min_count (int): The minimum count for your data type at which you want to start counting from for each country/region.
     
@@ -331,10 +331,10 @@ def calc_days_since_min_count(data, data_type, region_cols, min_count):
 
     # If they give us a wide format table, convert it to long format.
     if "date" not in data.columns:
-        data = _wide_to_long(data, data_type) 
+        data = _wide_to_long(data, data_col) 
 
     # Drop all rows for days that don't meet the minimum count
-    data = data[data[data_type] >= min_count] 
+    data = data[data[data_col] >= min_count] 
 
     # Check no duplicate dates in each group
     if data.duplicated(subset=[date_col] + region_cols).any():
@@ -348,7 +348,7 @@ def calc_days_since_min_count(data, data_type, region_cols, min_count):
     suffix_group_cols = [col + "_group" for col in region_cols]
 
     # Duplicate the date col so we can keep the original dates if desired
-    days_since_col = f"days_since_{min_count}_{data_type}"
+    days_since_col = f"days_since_{min_count}_{data_col}"
     data = data.assign(**{days_since_col: data[date_col]})
 
     # Put the non-grouping and non-date columns in the index, so they don't get changed
