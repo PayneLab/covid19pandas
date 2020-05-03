@@ -10,7 +10,7 @@
 #   limitations under the License.
 
 """
-COVID-19 data as pandas dataframes. Built-in plotting functions. Tutorials in our docs.
+Get COVID-19 data as pandas dataframes in just one function call. Built-in plotting functions. Tutorials in our docs.
 
 To get help on functions for getting data tables, exit the current help dialog and run 'help(covid19pandas.getters)'.
 
@@ -26,7 +26,7 @@ import os
 import sys
 import warnings
 
-from .getters import get_data_jhu, get_jhu_location_data, get_data_nyt, get_data_ctp, get_data_owid, get_cases, get_deaths, get_recovered
+from .getters import get_cases, get_deaths, get_recovered, get_data_jhu, get_jhu_location_data, get_data_nyt
 from .selectors import select_top_x_regions, select_regions, calc_x_day_rolling_mean, calc_daily_change, calc_days_since_min_count
 from .plotters import plot_lines, plot_lines_two_y
 from .download import download_text as _download_text
@@ -76,8 +76,6 @@ PATH_HERE = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(PATH_HERE, "data")
 JHU_DIR = os.path.join(DATA_DIR, "jhu")
 NYT_DIR = os.path.join(DATA_DIR, "nyt")
-CTP_DIR = os.path.join(DATA_DIR, "ctp")
-OWID_DIR = os.path.join(DATA_DIR, "owid")
 
 if not os.path.isdir(DATA_DIR):
     os.mkdir(DATA_DIR)
@@ -85,7 +83,3 @@ if not os.path.isdir(JHU_DIR):
     os.mkdir(JHU_DIR)
 if not os.path.isdir(NYT_DIR):
     os.mkdir(NYT_DIR)
-if not os.path.isdir(CTP_DIR):
-    os.mkdir(CTP_DIR)
-if not os.path.isdir(OWID_DIR):
-    os.mkdir(OWID_DIR)

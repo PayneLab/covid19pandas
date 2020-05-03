@@ -73,15 +73,6 @@ class TestGetters:
 
                             _check_gotten(df, format)
 
-    def test_get_data_ctp(self):
-        for update_option in update_options:
-            df = cod.get_data_ctp()
-            _check_gotten(df, "long", allow_negs=True)
-
-    def test_get_data_owid(self):
-        for update_option in update_options:
-            df = cod.get_data_owid()
-            _check_gotten(df, "long", allow_negs=True)
 
     def test_deprecated_getters(self):
         with pytest.warns(codex.DeprecatedWarning):
@@ -109,10 +100,8 @@ def _check_gotten(df, format, group_cols=None, allow_negs=False):
             group_cols = ["Combined_Key"]
         elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
             group_cols = ["county", "state"]
-        elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table, or CTP table. Note that we check only after we know it's not the NYT state and county table, because that table also has a "state" column.
+        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
             group_cols = ["state"]
-        elif {"location"}.issubset(df.columns): # OWID table
-            group_cols = ["location"]
         else:
             raise Exception("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 

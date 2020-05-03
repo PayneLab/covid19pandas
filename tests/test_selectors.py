@@ -10,7 +10,7 @@
 #   limitations under the License.
 
 import covid19pandas as cod
-from covid19pandas.exceptions import ParameterError
+import covid19pandas.exceptions as codex
 from test_getters import _check_gotten
 
 import pandas as pd
@@ -93,14 +93,6 @@ class TestSelectors:
                             if county_option:
                                 self._check_select_top_x(df, format, data_type, num_regions=2)
 
-    def test_select_top_x_ctp(self):
-        df = cod.get_data_ctp(update=False)
-        self._check_select_top_x(df, format="long", data_type="positive", num_regions=1)
-
-    def test_select_top_x_owid(self):
-        df = cod.get_data_owid(update=False)
-        self._check_select_top_x(df, format="long", data_type="total_cases", num_regions=1)
-
     # -------------------------------------------------------------------------------------------------------------
     # Tests for select_regions
     # -------------------------------------------------------------------------------------------------------------
@@ -136,14 +128,6 @@ class TestSelectors:
                         else:
                             cols_to_keep = [data_type]
                         self._check_select_regions(df, format, cols_kept=cols_to_keep)
-
-    def test_select_regions_ctp(self):
-        df = cod.get_data_ctp(update=False)
-        self._check_select_regions(df, format="long", cols_kept=["positive"])
-
-    def test_select_regions_owid(self):
-        df = cod.get_data_owid(update=False)
-        self._check_select_regions(df, format="long", cols_kept=["total_cases"])
 
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_x_day_rolling_mean
@@ -188,16 +172,6 @@ class TestSelectors:
                         # Note that we still also perform this test if data_type == "all" because we can also calculate the x day mean for all columns.
                         self._check_calc_x_day_rolling_mean(df, format, data_type)
 
-    def test_calc_x_day_rolling_mean_ctp(self):
-        df = cod.get_data_ctp(update=False)
-        data_col = "positive"
-        self._check_calc_x_day_rolling_mean(df, format="long", data_type=data_col)
-
-    def test_calc_x_day_rolling_mean_owid(self):
-        df = cod.get_data_owid(update=False)
-        data_col = "total_cases"
-        self._check_calc_x_day_rolling_mean(df, format="long", data_type=data_col)
-
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_daily_change
     # -------------------------------------------------------------------------------------------------------------
@@ -241,16 +215,6 @@ class TestSelectors:
                         # Note that we still also perform this test if data_type == "all" because we can also calculate daily change for all columns.
                         self._check_daily_change(df, format=format, data_type=data_type)
 
-    def test_calc_daily_change_ctp(self):
-        df = cod.get_data_ctp(update=False)
-        data_col = "positive"
-        self._check_daily_change(df, format="long", data_type=data_col)
-
-    def test_calc_daily_change_owid(self):
-        df = cod.get_data_owid(update=False)
-        data_col = "total_cases"
-        self._check_daily_change(df, format="long", data_type=data_col)
-
     # -------------------------------------------------------------------------------------------------------------
     # Tests for calc_days_since_min_count
     # -------------------------------------------------------------------------------------------------------------
@@ -288,16 +252,6 @@ class TestSelectors:
                         else:
                             self._check_days_since(df, format, data_type)
 
-    def test_calc_days_since_min_count_ctp(self):
-        df = cod.get_data_ctp(update=False)
-        data_col = "positive"
-        self._check_days_since(df, format="long", data_type=data_col)
-
-    def test_calc_days_since_min_count_owid(self):
-        df = cod.get_data_owid(update=False)
-        data_col = "total_cases"
-        self._check_days_since(df, format="long", data_type=data_col)
-
     # -------------------------------------------------------------------------------------------------------------
     # Helper methods
     # -------------------------------------------------------------------------------------------------------------
@@ -306,24 +260,15 @@ class TestSelectors:
 
         if num_regions == 1:
             # Search for defined region cols (based on data source)
-            allow_negs = False
             if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
                 region_col = "Country/Region"
                 exclude = ["US", "China"]
             elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
                 region_col = "Province_State"
                 exclude = ["New York", "Illinois"]
-            elif {"state", "positive"}.issubset(df.columns): # CTP table
-                region_col = "state"
-                exclude = ["WA", "NY"]
-                allow_negs = True
-            elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table. Note that we check for this after we check if it's the CTP table.
+            elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table.
                 region_col = "state"
                 exclude = ["Washington", "Illinois"]
-            elif {"location"}.issubset(df.columns): # OWID table
-                region_col = "location"
-                exclude = ["China", "United States"]
-                allow_negs = True
             else:
                 raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
@@ -350,25 +295,25 @@ class TestSelectors:
                 elif name == "top_uncombined" and {"county"}.issubset(df.columns):
                     _check_gotten(out, format, group_cols=group_cols + ["county"]) # If it's the NYT county table, we need to add "county" as a group col, but only for the uncombined table.
                 else:
-                    _check_gotten(out, format, group_cols=group_cols, allow_negs=allow_negs)
+                    _check_gotten(out, format, group_cols=group_cols)
 
             # Make sure that the data values weren't changed, if we didn't aggregate
             if format == "wide":
                 for name, out in outs.items():
                     df_dates = df.columns[df.columns.map(lambda col: issubclass(type(col), datetime.date))]
                     out_dates = out.columns[out.columns.map(lambda col: issubclass(type(col), datetime.date))]
-                    assert df_dates.eq(out_dates).all()
+                    assert df_dates.equals(out_dates)
 
                     if name == "top_uncombined":
                         for date in df_dates:
                             for region in out[region_col].unique():
-                                assert out.loc[out[region_col] == region, date].eq(df.loc[df[region_col] == region, date]).all()
+                                assert out.loc[out[region_col] == region, date].equals(df.loc[df[region_col] == region, date])
             else:
                 for name, out in outs.items():
                     assert data_type in out.columns
                     if name == "top_uncombined":
                         for region in out[region_col].unique():
-                            assert out.loc[out[region_col] == region, data_type].eq(df.loc[df[region_col] == region, data_type]).all()
+                            assert out.loc[out[region_col] == region, data_type].equals(df.loc[df[region_col] == region, data_type])
 
             # If we had other cols to keep, make sure they were kept, and are equal to their original values.
             for keep in other_to_keep:
@@ -376,7 +321,7 @@ class TestSelectors:
                     assert keep in out.columns
                     if name == "top_uncombined":
                         for region in out[region_col].unique():
-                            assert out.loc[out[region_col] == region, keep].eq(df.loc[df[region_col] == region, keep]).all()
+                            assert out.loc[out[region_col] == region, keep].equals(df.loc[df[region_col] == region, keep])
 
             # Check that the excluded countries aren't in the list
             assert not outs["top_with_exclusions"][region_col].isin(exclude).any()
@@ -407,7 +352,7 @@ class TestSelectors:
                 region_cols = ["county", "state"]
                 exclude = ["Washington", "Illinois"]
             elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
-                raise Exception("Can't do more than one region col for NYT states only or the CTP table.")
+                raise Exception("Can't do more than one region col for NYT states only table.")
             else:
                 raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
@@ -444,7 +389,7 @@ class TestSelectors:
                 for name, out in outs.items():
                     df_dates = df.columns[df.columns.map(lambda col: issubclass(type(col), datetime.date))]
                     out_dates = out.columns[out.columns.map(lambda col: issubclass(type(col), datetime.date))]
-                    assert df_dates.eq(out_dates).all()
+                    assert df_dates.equals(out_dates)
 
                     if name == "top_uncombined":
                         for date in df_dates:
@@ -456,7 +401,7 @@ class TestSelectors:
                                 rval1 = region_combos.iloc[i, 0]
                                 rval2 = region_combos.iloc[i, 1]
 
-                                assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), date].eq(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), date]).all()
+                                assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), date].equals(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), date])
             else:
                 for name, out in outs.items():
                     assert data_type in out.columns
@@ -469,7 +414,7 @@ class TestSelectors:
                             rval1 = region_combos.iloc[i, 0]
                             rval2 = region_combos.iloc[i, 1]
 
-                            assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), data_type].eq(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), data_type]).all()
+                            assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), data_type].equals(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), data_type])
 
             # If we had other cols to keep, make sure they were kept, and are equal to their original values.
             for keep in other_to_keep:
@@ -484,7 +429,7 @@ class TestSelectors:
                             rval1 = region_combos.iloc[i, 0]
                             rval2 = region_combos.iloc[i, 1]
 
-                            assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), keep].eq(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), keep]).all()
+                            assert out.loc[(out[rcol1] == rval1) & (out[rcol2] == rval2), keep].equals(df.loc[(df[rcol1] == rval1) & (df[rcol2] == rval2), keep])
 
             # Check that the excluded countries aren't in the list
             for region_col in region_cols:
@@ -512,24 +457,15 @@ class TestSelectors:
     def _check_select_regions(df, format, cols_kept):
 
         # Search for defined region cols (based on data source)
-        allow_negs = False
         if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
             region_col = "Country/Region"
             regions = ["US", "China", "Turkey"]
         elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
             region_col = "Province_State"
             regions = ["Washington", "New York", "Arizona"]
-        elif {"state", "positive"}.issubset(df.columns): # CTP table
-            region_col = "state"
-            regions = ["WA", "NY"]
-            allow_negs = True
         elif {"state"}.issubset(df.columns): # NYT USA state only or states and counties table.
             region_col = "state"
             regions = ["Washington", "New York", "Arizona"]
-        elif {"location"}.issubset(df.columns): # OWID table
-            region_col = "location"
-            regions = ["China", "United States"]
-            allow_negs = True
         else:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
@@ -543,11 +479,11 @@ class TestSelectors:
         for name, out in dfs.items():
             if name == "selected":
                 if format == "long":
-                    _check_gotten(out, format, group_cols=["date", region_col], allow_negs=allow_negs)
+                    _check_gotten(out, format, group_cols=["date", region_col])
                 else: 
-                    _check_gotten(out, format, group_cols=[region_col], allow_negs=allow_negs)
+                    _check_gotten(out, format, group_cols=[region_col])
             else: # name == "selected_uncombined"
-                _check_gotten(out, format, allow_negs=allow_negs)
+                _check_gotten(out, format)
 
         # Make sure that only the regions we specified exist in the region col
         for out in dfs.values():
@@ -558,17 +494,17 @@ class TestSelectors:
             if format == "wide":
                 df_dates = df.columns[df.columns.map(lambda col: issubclass(type(col), datetime.date))]
                 out_dates = out.columns[out.columns.map(lambda col: issubclass(type(col), datetime.date))]
-                assert df_dates.eq(out_dates).all()
+                assert df_dates.equals(out_dates)
 
                 if name == "selected_uncombined":
                     for date in df_dates:
-                        assert out[date].eq(df.loc[df[region_col].isin(regions), date]).all()
+                        assert out[date].equals(df.loc[df[region_col].isin(regions), date])
 
             else: # format == "long"
                 for col in cols_kept:
                         assert col in out.columns
                         if name == "selected_uncombined":
-                            assert out[col].eq(df.loc[df[region_col].isin(regions), col]).all()
+                            assert out[col].equals(df.loc[df[region_col].isin(regions), col])
 
     @staticmethod
     def _check_calc_x_day_rolling_mean(df, format, data_type, other_input_data_types=[]):
@@ -580,26 +516,21 @@ class TestSelectors:
             if "recovered" in df.columns:
                 data_types.append("recovered")
 
-        else:
+        elif data_type in ["cases", "deaths", "recovered"]:
             data_types = [data_type]
+        else:
+            raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', 'recovered', or 'all'.")
 
         # Decide on our region_cols
         # Search for defined region cols (based on data source)
-        allow_negs = False
         if {"Province/State", "Country/Region"}.issubset(df.columns): # JHU global table
             region_cols = ["Country/Region", "Province/State"]
         elif {"Combined_Key"}.issubset(df.columns): # JHU USA table
             region_cols = ["Province_State", "Admin2"]
         elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
             region_cols = ["county", "state"]
-        elif {"state", "positive"}.issubset(df.columns): # CTP table
-            region_cols = ["state"]
-            allow_negs = True
         elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
             region_cols = ["state"]
-        elif {"location"}.issubset(df.columns): # OWID table
-            region_cols = ["location"]
-            allow_negs = True
         else:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Province/State', 'Country/Region'}\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
@@ -615,7 +546,7 @@ class TestSelectors:
         else: # format == "wide"
             unique_cols = region_cols
         for name, out in dfs.items():
-            _check_gotten(out, format, group_cols=unique_cols, allow_negs=allow_negs)
+            _check_gotten(out, format, group_cols=unique_cols)
 
         # Check that data_types got averaged
         for out in dfs.values():
@@ -623,13 +554,13 @@ class TestSelectors:
                 if format == "long":
                     assert f"mean_{data_type}" in out.columns
                 else: # format == "wide"
-                    assert not df.eq(out).all()
+                    assert not df.equals(out)
 
         # Make sure other_input_data_types are unchanged
         if format == "long":
             for other_input in other_input_data_types:
                 for out in dfs.values():
-                    assert out[other_input].eq(df[other_input]).all()
+                    assert out[other_input].equals(df[other_input])
 
     @staticmethod
     def _check_daily_change(df, format, data_type, other_data_types=[]):
@@ -649,12 +580,8 @@ class TestSelectors:
             group_cols = ["Combined_Key"]
         elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
             group_cols = ["county", "state"]
-        elif {"state", "positive"}.issubset(df.columns): # CTP table
+        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
             group_cols = ["state"]
-        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table. Also not the CTP table.
-            group_cols = ["state"]
-        elif {"location"}.issubset(df.columns): # OWID table
-            group_cols = ["location"]
         else:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
@@ -664,13 +591,16 @@ class TestSelectors:
                 data_types = ["cases", "deaths"]
                 if "recovered" in df.columns:
                     data_types.append("recovered")
-            else:
+
+            elif data_type in ["cases", "deaths", "recovered"]:
                 data_types = [data_type]
+            else:
+                raise ParameterError(f"{data_type} is not a valid data type. Pass 'cases', 'deaths', or 'recovered'.")
 
             daily = cod.calc_daily_change(df, data_types, region_cols=group_cols)
 
             for other_data_type in other_data_types:
-                assert daily[other_data_type].eq(df[other_data_type]).all()
+                assert daily[other_data_type].equals(df[other_data_type])
 
             # Run basic table checks
             _check_gotten(daily, format, allow_negs=True)
@@ -688,8 +618,8 @@ class TestSelectors:
                         group_df = df[row_filter]
                         group_daily = daily[row_filter]
 
-                        assert group_daily["daily_" + iter_data_type].eq(pd.Series(group_daily[iter_data_type] - np.insert(group_daily[iter_data_type].values[:-1], 0, 0))).all() # Check the daily calculation against the cumulative col in the same df
-                        assert group_daily[iter_data_type].eq(group_df[iter_data_type]).all() # Check the cumulative col against the one in the original df
+                        assert group_daily["daily_" + iter_data_type].equals(pd.Series(group_daily[iter_data_type] - np.insert(group_daily[iter_data_type].values[:-1], 0, 0))) # Check the daily calculation against the cumulative col in the same df
+                        assert group_daily[iter_data_type].equals(group_df[iter_data_type]) # Check the cumulative col against the one in the original df
 
                 elif len(group_cols) == 2:
                     group_col1 = group_cols[0]
@@ -707,8 +637,8 @@ class TestSelectors:
                             group_df = df[df_filter]
                             group_daily = daily[df_filter]
 
-                            assert group_daily["daily_" + iter_data_type].eq(pd.Series(group_daily[iter_data_type] - np.insert(group_daily[iter_data_type].values[:-1], 0, 0))).all() # Check the daily calculation against the cumulative col in the same df
-                            assert group_daily[iter_data_type].eq(group_df[iter_data_type]).all() # Check the cumulative col against the one in the original df
+                            assert group_daily["daily_" + iter_data_type].equals(pd.Series(group_daily[iter_data_type] - np.insert(group_daily[iter_data_type].values[:-1], 0, 0))) # Check the daily calculation against the cumulative col in the same df
+                            assert group_daily[iter_data_type].equals(group_df[iter_data_type]) # Check the cumulative col against the one in the original df
                         else:
                             raise Exception("That was unexpected.")
 
@@ -748,19 +678,12 @@ class TestSelectors:
         """
 
         # Search for defined grouping cols (based on data source and region)
-        allow_negs = False
         if {"Combined_Key"}.issubset(df.columns): # JHU table
             group_cols = ["Combined_Key"]
         elif {"county", "state"}.issubset(df.columns): # NYT USA state and county table
             group_cols = ["county", "state"]
-        elif {"state", "positive"}.issubset(df.columns): # CTP table
+        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table.
             group_cols = ["state"]
-            allow_negs = True
-        elif {"state"}.issubset(df.columns): # NYT USA state only table. Note that this column also exists in the state/county table, so we do the check after we've determined it's not that table. Also not the CTP table.
-            group_cols = ["state"]
-        elif {"location"}.issubset(df.columns): # OWID table
-            group_cols = ["location"]
-            allow_negs = True
         else:
             raise ParameterError("The dataframe you passed does not contain any of the standard location grouping columns. Must contain one of these sets of columns: \n\n{'Combined_Key'}\n{'county', 'state'}\n{'state'}\n\n" + f"Your dataframe's columns are:\n{df.columns}")
 
@@ -769,7 +692,7 @@ class TestSelectors:
         ct = cod.calc_days_since_min_count(df, data_type, region_cols=group_cols, min_count=min_count)
 
         # Run basic table checks
-        _check_gotten(ct, format="long", allow_negs=allow_negs) # The calc_days_since_min_count function only outputs table in long format, even if given wide format as input
+        _check_gotten(ct, format="long") # The calc_days_since_min_count function only outputs table in long format, even if given wide format as input
 
         # Check that all values in data type col are >= min count
         assert (ct[data_type] >= min_count).all()
