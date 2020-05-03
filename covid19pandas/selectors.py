@@ -302,14 +302,12 @@ def calc_daily_change(data, data_cols, region_cols):
             id_cols = data.columns[~data.columns.isin(suffix_region_cols + [daily_col])].tolist()
             data = data.set_index(id_cols)
 
-            # Fill NaNs in grouping cols (fillna excludes index)
-            data = data.fillna("n/a")
+            # Fill NaNs in grouping cols so grouping still works
+            for col in suffix_region_cols:
+                data[col] = data[col].fillna("n/a")
 
             # Group by location and calculate daily counts with our helper function _offset_subtract
             data = data.groupby(suffix_region_cols).transform(_offset_subtract)
-
-            # Put back in any remaining NaNs
-            data = data.replace(to_replace="n/a", value=np.nan)
 
             # Take the other columns back out of the index
             data = data.reset_index()

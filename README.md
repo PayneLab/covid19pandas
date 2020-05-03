@@ -1,5 +1,5 @@
 # covid19pandas
-This package presents COVID-19 data from [Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19) and [The New York Times](https://github.com/nytimes/covid-19-data) in pandas dataframes, to make analysis and visualization easier in a Python environment.
+This package presents COVID-19 data from [Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19), [The New York Times](https://github.com/nytimes/covid-19-data), [Our World in Data](https://github.com/owid/covid-19-data/tree/master/public/data), and [The COVID Tracking Project](https://covidtracking.com/) in pandas dataframes, to make analysis and visualization easier in a Python environment.
 
 We provide this resource because it is important for anyone to be able to easily access data. Nevertheless, you should always follow the COVID-19 safety protocols established by authorities in your area rather than relying on any conclusions you may divine from these data about the state of the world. Established guidelines often include staying home as much as possible, avoiding contact with people outside your household, washing your hands frequently, and wearing a mask in public. 
 
@@ -17,3 +17,10 @@ After importing the package, you can quickly access data with a simple function 
 Our [tutorials](https://github.com/PayneLab/covid19pandas/tree/master/docs) show you how to create plots like the one below. Using our built-in functions, you can create many plot types in just two to five function calls.
 
 ![Plot_demo](https://raw.githubusercontent.com/PayneLab/covid19pandas/master/docs/images/covid19pandas_twinx_plot.png)
+
+### Data sources
+This package provides access to data from the following sources:
+- Our World in Data, through the authors listed on their website (https://github.com/owid/covid-19-data/tree/master/public/data), and licensed under the Creative Commons BY License (4.0)
+- The COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19)
+- The COVID Tracking Project (https://covidtracking.com/)
+- The New York Times (https://github.com/nytimes/covid-19-data)

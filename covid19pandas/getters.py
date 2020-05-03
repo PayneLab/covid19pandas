@@ -24,7 +24,7 @@ from .exceptions import FileDoesNotExistError, NoInternetError, ParameterError, 
 from .utils import _wide_to_long, _long_to_wide
 
 def get_data_jhu(format="long", data_type="all", region="global", update=True):
-    """Get the most current data tables from JHU (https://github.com/CSSEGISandData/COVID-19).
+    """Get the most current data tables from the COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).
 
     Parameters:
     format (str, optional): Format to return the tables in. Pass either "long" or "wide". See https://en.wikipedia.org/wiki/Wide_and_narrow_data for details on the two formats. Default "long".
@@ -150,7 +150,7 @@ def get_data_jhu(format="long", data_type="all", region="global", update=True):
     df = df.sort_values(by=sort_cols)
     df = df.reset_index(drop=True) # So the range index is still in ascending order after sorting
 
-    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
+    print("These data were obtained from the COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return df
 
 def get_jhu_location_data(update=True):
@@ -166,10 +166,11 @@ def get_jhu_location_data(update=True):
     loc_table_base_url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/"
     loc_table_name = "UID_ISO_FIPS_LookUp_Table.csv"
     loc_table = _get_table(loc_table_base_url, loc_table_name, source="jhu", update=update)
+    print("These data were obtained from the COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return loc_table
 
 def get_data_nyt(format="long", data_type="all", counties=False, update=True):
-    """Get the most current data tables from NYT (https://github.com/nytimes/covid-19-data).
+    """Get the most current data tables from The New York Times (https://github.com/nytimes/covid-19-data).
 
     Parameters:
     format (str, optional): Format to return the tables in. Pass either "long" or "wide". See https://en.wikipedia.org/wiki/Wide_and_narrow_data for details on the two formats. Default "long".
@@ -212,6 +213,40 @@ def get_data_nyt(format="long", data_type="all", counties=False, update=True):
         df = _long_to_wide(df, data_type, sort_by="state")
 
     print("These data were obtained from The New York Times (https://github.com/nytimes/covid-19-data).")
+    return df
+
+def get_data_ctp(update=True):
+    """Get the most current data from the COVID Tracking Project (https://covidtracking.com/).
+
+    Parameters:
+    update (bool, optional): Whether to download the latest tables from the Internet. Otherwise, will attempt to use previously downloaded tables, if they exist. Default True.
+
+    Returns:
+    pandas.DataFrame: The requested data table.
+    """
+
+    base_url = "https://raw.githubusercontent.com/COVID19Tracking/covid-tracking-data/master/data/"
+    file_name = "states_daily_4pm_et.csv"
+    df = _get_table(base_url, file_name, source="ctp", update=update)
+
+    print("These data were obtained from the COVID Tracking Project (https://covidtracking.com/).")
+    return df
+
+def get_data_owid(update=True):
+    """Get the most current data from Our World in Data, through the authors listed on their website (https://github.com/owid/covid-19-data/tree/master/public/data), and licensed under the Creative Commons BY License (4.0).
+
+    Parameters:
+    update (bool, optional): Whether to download the latest tables from the Internet. Otherwise, will attempt to use previously downloaded tables, if they exist. Default True.
+
+    Returns:
+    pandas.DataFrame: The requested data table.
+    """
+
+    base_url = "https://covid.ourworldindata.org/data/"
+    file_name = "owid-covid-data.csv"
+    df = _get_table(base_url, file_name, source="owid", update=update)
+
+    print("These data were obtained from Our World in Data, through the authors listed on their website (https://github.com/owid/covid-19-data/tree/master/public/data), and licensed under the Creative Commons BY License (4.0).")
     return df
 
 # Helper functions
@@ -262,8 +297,14 @@ def _get_table(base_url, file_name, source, update):
         if "Combined_Key" in df.columns:
             df["Combined_Key"] = df["Combined_Key"].str.replace(" ", "") # Spacing isn't consistent for this column, so we'll nix all spaces
 
-
     if source == "nyt":
+        df = df.astype({"date": 'datetime64'})
+
+    if source == "ctp":
+        df["date"] = pd.to_datetime(df["date"], format="%Y%m%d")
+        df = df.astype({"dateChecked": "datetime64"})
+
+    if source == "owid":
         df = df.astype({"date": 'datetime64'})
 
     return df
@@ -275,7 +316,7 @@ def get_cases():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
     warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
-    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
+    print("These data were obtained from the COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_confirmed_global.csv", source="jhu", update=True)
 
 def get_deaths():
@@ -284,7 +325,7 @@ def get_deaths():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
     warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
-    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
+    print("These data were obtained from the COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_deaths_global.csv", source="jhu", update=True)
 
 def get_recovered():
@@ -293,5 +334,5 @@ def get_recovered():
     # Deprecated warning
     url = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
     warnings.warn("This function is deprecated. Use get_data_jhu instead; see tutorials at <https://github.com/PayneLab/covid19pandas/tree/master/docs/>.", DeprecatedWarning, stacklevel=2)
-    print("These data were obtained from Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
+    print("These data were obtained from the COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University (https://github.com/CSSEGISandData/COVID-19).")
     return _get_table(url, "time_series_covid19_recovered_global.csv", source="jhu", update=True)
