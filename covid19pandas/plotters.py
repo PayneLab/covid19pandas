@@ -94,7 +94,7 @@ def plot_lines(data, x_col, y_col, group_col, x_lab=None, y_lab=None, title=None
     # labels, we have to re-create the legend, excluding that first label, in order to set the title font size.
 
     handles, labels = ax.get_legend_handles_labels() # Get the handles and labels from the default legend Seaborn creates
-    ax.legend(handles=handles[1:], labels=labels[1:], title=legend_title, title_fontsize="14") # Re-make the legend, excluding the first label and its handle that they hacked for the legend title
+    ax.legend(handles=handles[0:], labels=labels[0:], title=legend_title, title_fontsize="14") # Re-make the legend
 
     return fig, ax
 
